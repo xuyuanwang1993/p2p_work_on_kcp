@@ -14,3 +14,5 @@ client1:
  client1:
   export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
   ./p2p_client 192.168.1.1 2 recv
+  
+  input the device_id like 1 to connect by the commandline.
