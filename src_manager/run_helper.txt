@@ -1,0 +1,16 @@
+Build:
+    make
+server:
+    ./run.sh
+sever_ip=192.168.1.1
+mode1 send
+mode2 recv
+client:
+ export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+ ./p2p_cpient server_ip device_id mode
+client1:
+ export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+ ./p2p_client 192.168.1.1 1 send
+ client1:
+  export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+  ./p2p_client 192.168.1.1 2 recv
