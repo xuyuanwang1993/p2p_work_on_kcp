@@ -275,7 +275,9 @@ void p2p_punch_server::handle_set_up_connection(int send_fd,struct sockaddr_in &
     do{
         auto device_id=recv_map.find("device_id");
         auto remote_device_id=recv_map.find("remote_device_id");
-        if(device_id==std::end(recv_map)||remote_device_id==std::end(recv_map))
+        auto channel_id=recv_map.find("channel_id");
+        auto src_name=recv_map.find("src_name");
+        if(device_id==std::end(recv_map)||remote_device_id==std::end(recv_map)||src_name==std::end(recv_map)||channel_id==std::end(recv_map))
         {
             response=packet_error_response("set_up_connection","check the command!");
             ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
@@ -309,7 +311,8 @@ void p2p_punch_server::handle_set_up_connection(int send_fd,struct sockaddr_in &
         m_session_map.insert(std::make_pair(t_session.session_id,t_session));
         message_handle::packet_buf(response,"cmd","set_up_connection");
         message_handle::packet_buf(response,"session_id",std::to_string(t_session.session_id));
-
+        message_handle::packet_buf(response,"channel_id",channel_id->second);
+        message_handle::packet_buf(response,"src_name",src_name->second);
         ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
 
         struct sockaddr_in addr2 = {0};

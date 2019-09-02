@@ -13,7 +13,7 @@ static  int kcp_output(const char *buf, int len, struct IKCPCB *kcp, void *user)
     return interface->Send(buf,len);
 }
 
-KCP_Interface::KCP_Interface(int fd,unsigned int conv_id,xop::EventLoop *event_loop,ClearCallback clearCB,RecvDataCallback recvCB,void *data,int window_size)
+KCP_Interface::KCP_Interface(int fd,unsigned int conv_id,xop::EventLoop *event_loop,ClearCallback clearCB,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size)
     :m_readBufferPtr(new xop::BufferReader),m_udp_channel(new xop::Channel(fd)),m_clear_CB(clearCB),m_recvCB(recvCB),m_data(data),m_fd(fd)
 {
     m_taskScheduler=event_loop?event_loop->getTaskScheduler():nullptr;
@@ -22,6 +22,7 @@ KCP_Interface::KCP_Interface(int fd,unsigned int conv_id,xop::EventLoop *event_l
     ikcp_wndsize(m_kcp, window_size, window_size);
     SetTransferMode(FAST_MODE);
     m_kcp->output=kcp_output;
+    m_kcp->user=this;
     m_udp_channel->enableReading();
     m_udp_channel->enableWriting();
     m_have_cleared=false;
@@ -70,7 +71,7 @@ KCP_Interface::KCP_Interface(int fd,unsigned int conv_id,xop::EventLoop *event_l
     });
     m_taskScheduler->updateChannel(m_udp_channel);
 }
-KCP_Interface::KCP_Interface(std::shared_ptr<xop::Channel>channel,unsigned int conv_id,xop::EventLoop *event_loop,ClearCallback clearCB,RecvDataCallback recvCB,void *data,int window_size)
+KCP_Interface::KCP_Interface(std::shared_ptr<xop::Channel>channel,unsigned int conv_id,xop::EventLoop *event_loop,ClearCallback clearCB,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size)
         :m_readBufferPtr(new xop::BufferReader),m_udp_channel(channel),m_clear_CB(clearCB),m_recvCB(recvCB),m_data(data)
 {
     m_fd=channel->fd();
@@ -152,17 +153,21 @@ void KCP_Interface::SetTransferMode(KCP_TRANSFER_MODE mode,int nodelay, int inte
 
 void KCP_Interface::Send_Userdata(std::shared_ptr<char>buf,int len)
 {
-    static double q1=0,q2=0;
     m_taskScheduler->addTriggerEvent([this,buf,len](){
-        q1++;
         if(this->CheckTransWindow())
         {
             ikcp_send(this->m_kcp,buf.get(),len);
         }
         else
         {
-            q2++;
-            std::cout<<"loss_rate :"<<q2/q1<<std::endl;
+            if(m_lost_connectionCB)
+            {
+                int64_t time_now=KCP_Manager::GetTimeNow();
+                if(time_now-m_last_alive_time>MAX_TIMEOUT_TIME)
+                {//判断对端是否断开
+                    m_lost_connectionCB(m_data);
+                }
+            }
         }
     });
 }
@@ -214,7 +219,7 @@ KCP_Interface::~KCP_Interface()
 {
     ikcp_release(m_kcp);
 }
-std::shared_ptr<KCP_Interface> KCP_Manager::AddConnection(int fd,std::string ip,int port,unsigned int conv_id,RecvDataCallback recvCB,void *data,int window_size)
+std::shared_ptr<KCP_Interface> KCP_Manager::AddConnection(int fd,std::string ip,int port,unsigned int conv_id,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size)
 {
     if(!m_init||fd<0)return nullptr;
     std::cout<<"AddConnection"<<std::endl;
@@ -231,7 +236,7 @@ std::shared_ptr<KCP_Interface> KCP_Manager::AddConnection(int fd,std::string ip,
     m_kcp_map.insert(std::make_pair(conv_id,interface));
     return interface;
 }
-std::shared_ptr<KCP_Interface> KCP_Manager::AddConnection(std::shared_ptr<xop::Channel> channel,unsigned int conv_id,RecvDataCallback recvCB,void *data,int window_size)
+std::shared_ptr<KCP_Interface> KCP_Manager::AddConnection(std::shared_ptr<xop::Channel> channel,unsigned int conv_id,RecvDataCallback recvCB,std::shared_ptr<sensor_net::data_ptr>data,int window_size)
 {
     if(!m_init)return nullptr;
     std::cout<<"AddConnection"<<std::endl;

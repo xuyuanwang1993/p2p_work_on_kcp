@@ -43,14 +43,14 @@ p2p_punch_client::p2p_punch_client()
     m_wan_port=FIRST_STRING;
     m_cache_timer_id=m_event_loop->addTimer([this](){this->remove_invalid_resources();return true;},CHECK_INTERVAL);//添加超时事件
 }
-bool p2p_punch_client::try_establish_connection(std::string remote_device_id)
+bool p2p_punch_client::try_establish_connection(std::string remote_device_id,int channel_id,std::string src_name)
 {
     if(!m_p2p_flag)
     {
         std::cout<<"can't establish_connection!"<<std::endl;
         return false;
     }
-    send_set_up_connection_packet(remote_device_id);
+    send_set_up_connection_packet(remote_device_id,channel_id,src_name);
     return true;
 }
 
@@ -221,12 +221,14 @@ void p2p_punch_client::send_punch_hole_response_packet(m_p2p_session &session)
     addr.sin_port = htons(UDP_RECV_PORT);
     ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
 }
-void p2p_punch_client::send_set_up_connection_packet(std::string remote_device_id)
+void p2p_punch_client::send_set_up_connection_packet(std::string remote_device_id,int channel_id,std::string src_name)
 {
     std::string request;
     message_handle::packet_buf(request,"cmd","set_up_connection");
     message_handle::packet_buf(request,"device_id",m_device_id);
     message_handle::packet_buf(request,"remote_device_id",remote_device_id);
+    message_handle::packet_buf(request,"channel_id",std::to_string(channel_id));
+    message_handle::packet_buf(request,"src_name",src_name);
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
@@ -247,7 +249,7 @@ void p2p_punch_client::handle_punch_hole_response(std::map<std::string,std::stri
             if(t_session.callback)
             {
                 std::cout<<"callback"<<std::endl;
-                t_session.callback(t_session.channelPtr,t_session.session_id);
+                t_session.callback(t_session.channelPtr,t_session.session_id,t_session.channel_id,t_session.src_name);
             }
             m_session_map.erase(t_session.session_id);
         }
@@ -275,12 +277,16 @@ void p2p_punch_client::handle_punch_hole(std::map<std::string,std::string> &recv
 void p2p_punch_client::handle_set_up_connection(std::map<std::string,std::string> &recv_map)//请求连接
 {
     auto session_id=recv_map.find("session_id");
-    if(session_id!=std::end(recv_map))
+    auto channel_id=recv_map.find("channel_id");
+    auto src_name=recv_map.find("src_name");
+    if(session_id!=std::end(recv_map)&&channel_id!=std::end(recv_map)&&src_name!=std::end(recv_map))
     {
         int fd=get_udp_session_sock();
         if(fd<0)return;
         m_p2p_session t_session;
         t_session.session_id=std::stoi(session_id->second);
+        t_session.channel_id=std::stoi(channel_id->second);
+        t_session.src_name=src_name->second;
         t_session.callback=m_connectCB;
         t_session.alive_time=GetTimeNow();
         t_session.channelPtr.reset(new xop::Channel(fd));

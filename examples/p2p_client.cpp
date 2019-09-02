@@ -30,11 +30,13 @@ int main(int argc,char*argv[])
         client.setEventCallback(kcp_test::kcp_callback);
     }
     std::string command;
+    int channel_id=0;
+    std::string src_name="test_";
     while(1)
     {
         std::cin>>command;
         std::cout<<std::endl<<"device_id :"<<command<<std::endl;
-        client.try_establish_connection(command);
+        client.try_establish_connection(command,channel_id++,src_name+std::to_string(channel_id));
     }
     return 0;
 }

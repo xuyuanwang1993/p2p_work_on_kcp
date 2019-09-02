@@ -7,7 +7,7 @@
 #include <Logger.h>
 class p2p_punch_client{
 public:
-    typedef std::function<void(std::shared_ptr<xop::Channel>,int)> P2PEventCallback;
+    typedef std::function<void(std::shared_ptr<xop::Channel>,int,int,std::string)> P2PEventCallback;
 private:
     const unsigned short UDP_RECV_PORT=23333;
     const int SESSION_CACHE_TIME=10000;//10s
@@ -15,6 +15,8 @@ private:
     const int ALIVE_TIME_INTERVAL=30000;//30s
     typedef struct _m_p2p_session{
         int session_id;
+        int channel_id;
+        std::string src_name;
         std::shared_ptr<xop::Channel> channelPtr;//连接时创建的套接字
         P2PEventCallback callback;//连接成功回调函数
         int64_t alive_time;
@@ -23,10 +25,10 @@ public:
     p2p_punch_client(std::string server_ip,std::string device_id,std::shared_ptr<xop::EventLoop> event_loop);
     ~p2p_punch_client();
     void setEventCallback(const P2PEventCallback& cb)
-    { m_connectCB = cb; };
+    { m_connectCB = cb;};
     void start(){if(!m_p2p_flag){send_nat_type_probe_packet();};};
     bool check_is_p2p_able(){return m_p2p_flag;};
-    bool try_establish_connection(std::string remote_device_id);
+    bool try_establish_connection(std::string remote_device_id,int channel_id,std::string src_name);
 private:
     int get_udp_session_sock();
     void remove_invalid_resources();
@@ -38,7 +40,7 @@ private:
     void send_punch_hole_packet(m_p2p_session &session);
     void send_low_ttl_packet(m_p2p_session &session,std::string ip,std::string port);//进行打洞操作，并connect
     void send_punch_hole_response_packet(m_p2p_session &session);
-    void send_set_up_connection_packet(std::string remote_device_id);
+    void send_set_up_connection_packet(std::string remote_device_id,int channel_id,std::string src_name);
 
     void handle_punch_hole_response(std::map<std::string,std::string> &recv_map);//打洞成功回复
     void handle_punch_hole(std::map<std::string,std::string> &recv_map);//打洞
