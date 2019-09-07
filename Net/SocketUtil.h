@@ -6,7 +6,7 @@
 
 #include "Socket.h"
 #include <string>
-
+#include <random>
 namespace xop
 {
     
@@ -14,6 +14,7 @@ class SocketUtil
 {
 public:
     static bool bind(SOCKET sockfd, std::string ip, uint16_t port);
+    static bool random_bind(SOCKET sockfd,int max_try_times=30000);
     static void setNonBlock(SOCKET fd);
     static void setRecvBlockTime(SOCKET fd,int ms);
     static void setBlock(SOCKET fd, int writeTimeout=0);
@@ -26,6 +27,7 @@ public:
     static void setRecvBufSize(SOCKET sockfd, int size);
     static std::string getPeerIp(SOCKET sockfd);
     static uint16_t getPeerPort(SOCKET sockfd);
+    static uint16_t getLocalPort(SOCKET sockfd);
     static int getPeerAddr(SOCKET sockfd, struct sockaddr_in *addr);
     static void close(SOCKET sockfd);
     static bool connect(SOCKET sockfd, std::string ip, uint16_t port, int timeout=0);

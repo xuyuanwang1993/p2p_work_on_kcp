@@ -21,6 +21,24 @@ bool SocketUtil::bind(SOCKET sockfd, std::string ip, uint16_t port)
 
     return true;
 }
+bool SocketUtil::random_bind(SOCKET sockfd,int max_try_times)
+{
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    std::random_device rd;
+    int i=0;
+    unsigned short port;
+    while(i<max_try_times)
+    {
+        i++;
+        port=25000+rd()%40535;
+        addr.sin_port = htons(port);
+        if(::bind(sockfd, (struct sockaddr*)&addr, sizeof addr) == SOCKET_ERROR)continue;
+        return true;
+    }
+    return false;
+}
 
 void SocketUtil::setNonBlock(SOCKET fd)
 {
@@ -133,6 +151,17 @@ uint16_t SocketUtil::getPeerPort(SOCKET sockfd)
     struct sockaddr_in addr = { 0 };
     socklen_t addrlen = sizeof(struct sockaddr_in);
     if (getpeername(sockfd, (struct sockaddr *)&addr, &addrlen) == 0)
+    {
+        return ntohs(addr.sin_port);
+    }
+
+    return 0;
+}
+uint16_t SocketUtil::getLocalPort(SOCKET sockfd)
+{
+    struct sockaddr_in addr = { 0 };
+    socklen_t addrlen = sizeof(struct sockaddr_in);
+    if (getsockname(sockfd, (struct sockaddr *)&addr, &addrlen) == 0)
     {
         return ntohs(addr.sin_port);
     }

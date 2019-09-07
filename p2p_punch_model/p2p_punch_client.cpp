@@ -1,6 +1,7 @@
 #include "p2p_punch_client.h"
 #include <assert.h>
 #include "parase_request.h"
+#include "NetInterface.h"
 #define FIRST_STRING "first"
 #define UDP_SND_BUF_SIZE (32*1024)
 p2p_punch_client::p2p_punch_client(std::string server_ip,std::string device_id,std::shared_ptr<xop::EventLoop> event_loop)
@@ -72,8 +73,7 @@ int p2p_punch_client::get_udp_session_sock()
     if(fd>0)
     {
         xop::SocketUtil::setNonBlock(fd);
-        xop::SocketUtil::setReuseAddr(fd);
-        xop::SocketUtil::setReusePort(fd);
+        xop::SocketUtil::random_bind(fd,1000);
         xop::SocketUtil::setSendBufSize(fd, UDP_SND_BUF_SIZE);
     }
     return fd;
@@ -160,6 +160,7 @@ void p2p_punch_client::send_alive_packet()
     std::string request;
     message_handle::packet_buf(request,"cmd","keep_alive");
     message_handle::packet_buf(request,"device_id",m_device_id);
+    message_handle::packet_buf(request,"local_ip",xop::NetInterface::getLocalIPAddress());
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
@@ -187,6 +188,7 @@ void p2p_punch_client::send_punch_hole_packet(m_p2p_session &session)
     message_handle::packet_buf(request,"cmd","punch_hole");
     message_handle::packet_buf(request,"device_id",m_device_id);
     message_handle::packet_buf(request,"session_id",std::to_string(session.session_id));
+    message_handle::packet_buf(request,"local_port",std::to_string(xop::SocketUtil::getLocalPort(session.channelPtr->fd())));
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
@@ -211,6 +213,7 @@ void p2p_punch_client::send_low_ttl_packet(m_p2p_session &session,std::string ip
 }
 void p2p_punch_client::send_punch_hole_response_packet(m_p2p_session &session)
 {
+    std::cout<<"send_punch_hole_response_packet"<<std::endl;
     std::string request;
     message_handle::packet_buf(request,"cmd","punch_hole_response");
     message_handle::packet_buf(request,"device_id",m_device_id);

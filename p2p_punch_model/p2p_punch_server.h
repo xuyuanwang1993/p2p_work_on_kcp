@@ -14,14 +14,17 @@ class p2p_punch_server{
 public:
     typedef struct _device_nat_info{
         std::string device_id;
-        std::string ip;
-        std::string port;
+        std::string ip;//extranet_ip外网ip
+        std::string port;//extranet_port外网端口
+        std::string local_ip;//本地ip
         int64_t alive_time;
     }device_nat_info;
     typedef struct _punch_session{
         std::string device_id;
         std::string ip;
         std::string port;
+        std::string local_ip;//本地ip
+        std::string local_port;//本地端口
         int64_t alive_time;
         bool recv_punch_packet;
         bool recv_punch_response;

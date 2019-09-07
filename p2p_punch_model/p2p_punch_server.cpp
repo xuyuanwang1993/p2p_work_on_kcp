@@ -214,6 +214,13 @@ void p2p_punch_server::handle_punch_hole(int send_fd,struct sockaddr_in &addr,st
             ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
             break;
         }
+        auto local_port=recv_map.find("local_port");
+        if(local_port==std::end(recv_map))
+        {
+            response=packet_error_response("punch_hole","check the command!");
+            ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
+            break;
+        }
         auto session=m_session_map.find(std::stoi(session_id->second));
         if(session==std::end(m_session_map))
         {
@@ -230,6 +237,7 @@ void p2p_punch_server::handle_punch_hole(int send_fd,struct sockaddr_in &addr,st
             tmp.session[0].alive_time=this->GetTimeNow();
             tmp.session[0].ip=ip;
             tmp.session[0].port=port;
+            tmp.session[0].local_port=local_port->second;
         }
         else if((device_id->second==tmp.session[1].device_id))
         {
@@ -237,6 +245,7 @@ void p2p_punch_server::handle_punch_hole(int send_fd,struct sockaddr_in &addr,st
             tmp.session[1].alive_time=this->GetTimeNow();
             tmp.session[1].ip=ip;
             tmp.session[1].port=port;
+            tmp.session[1].local_port=local_port->second;
         }
         else
         {
@@ -248,20 +257,36 @@ void p2p_punch_server::handle_punch_hole(int send_fd,struct sockaddr_in &addr,st
         {
             message_handle::packet_buf(response,"cmd","punch_hole");
             message_handle::packet_buf(response,"session_id",session_id->second);
-
+            bool is_local_connection=tmp.session[0].ip==tmp.session[1].ip;
             struct sockaddr_in addr2 = {0};
             addr2.sin_family = AF_INET;
             std::string t_response_1=response;
-            message_handle::packet_buf(t_response_1,"ip",tmp.session[0].ip);
-            message_handle::packet_buf(t_response_1,"port",tmp.session[0].port);
+            if(is_local_connection)
+            {
+                message_handle::packet_buf(t_response_1,"ip",tmp.session[0].local_ip);
+                message_handle::packet_buf(t_response_1,"port",tmp.session[0].local_port);
+            }
+            else
+            {
+                message_handle::packet_buf(t_response_1,"ip",tmp.session[0].ip);
+                message_handle::packet_buf(t_response_1,"port",tmp.session[0].port);
+            }
 
             addr2.sin_addr.s_addr = inet_addr(tmp.session[1].ip.c_str());
             addr2.sin_port = htons(std::stoi(tmp.session[1].port));
             ::sendto(send_fd,t_response_1.c_str(),t_response_1.length(),0,(struct sockaddr*)&addr2, sizeof addr2);
             std::string t_response_2=response;
 
-            message_handle::packet_buf(t_response_2,"ip",tmp.session[1].ip);
-            message_handle::packet_buf(t_response_2,"port",tmp.session[1].port);
+            if(is_local_connection)
+            {
+                message_handle::packet_buf(t_response_2,"ip",tmp.session[1].local_ip);
+                message_handle::packet_buf(t_response_2,"port",tmp.session[1].local_port);
+            }
+            else
+            {
+                message_handle::packet_buf(t_response_2,"ip",tmp.session[1].ip);
+                message_handle::packet_buf(t_response_2,"port",tmp.session[1].port);
+            }
             addr2.sin_addr.s_addr = inet_addr(tmp.session[0].ip.c_str());
             addr2.sin_port = htons(std::stoi(tmp.session[0].port));
             ::sendto(send_fd,t_response_2.c_str(),t_response_2.length(),0,(struct sockaddr*)&addr2, sizeof addr2);
@@ -289,8 +314,15 @@ void p2p_punch_server::handle_set_up_connection(int send_fd,struct sockaddr_in &
             ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
             break;
         }
-        auto nat_info=m_device_map.find(remote_device_id->second);
+        auto nat_info=m_device_map.find(device_id->second);
         if(nat_info==std::end(m_device_map))
+        {
+            response=packet_error_response("set_up_connection","invalid device_id!");
+            ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
+            break;
+        }
+        auto remote_nat_info=m_device_map.find(remote_device_id->second);
+        if(remote_nat_info==std::end(m_device_map))
         {
             response=packet_error_response("set_up_connection","invalid device_id!");
             ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
@@ -300,11 +332,13 @@ void p2p_punch_server::handle_set_up_connection(int send_fd,struct sockaddr_in &
         t_session.session_id=m_session_id++;
         t_session.session[0].alive_time=this->GetTimeNow();
         t_session.session[0].device_id=device_id->second;
+        t_session.session[0].local_ip=nat_info->second.local_ip;
         t_session.session[0].recv_punch_packet=false;
         t_session.session[0].recv_punch_response=false;
 
         t_session.session[1].alive_time=this->GetTimeNow();
         t_session.session[1].device_id=remote_device_id->second;
+        t_session.session[1].local_ip=remote_nat_info->second.local_ip;
         t_session.session[1].recv_punch_packet=false;
         t_session.session[1].recv_punch_response=false;
 
@@ -317,8 +351,8 @@ void p2p_punch_server::handle_set_up_connection(int send_fd,struct sockaddr_in &
 
         struct sockaddr_in addr2 = {0};
         addr2.sin_family = AF_INET;
-        addr2.sin_addr.s_addr = inet_addr(nat_info->second.ip.c_str());
-        addr2.sin_port = htons(std::stoi(nat_info->second.port));
+        addr2.sin_addr.s_addr = inet_addr(remote_nat_info->second.ip.c_str());
+        addr2.sin_port = htons(std::stoi(remote_nat_info->second.port));
         ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr2, sizeof addr2);
     }while(0);
 }
@@ -330,6 +364,8 @@ void p2p_punch_server::handle_keep_alive(int send_fd,struct sockaddr_in &addr,st
     std::string port=std::to_string(ntohs(addr.sin_port));
     auto device_id=recv_map.find("device_id");
     if(device_id==std::end(recv_map))return;
+    auto local_ip=recv_map.find("local_ip");
+    if(local_ip==std::end(recv_map))return;
     //std::cout<<device_id->second<<std::endl;
     auto nat_info=m_device_map.find(device_id->second);
     if(nat_info==std::end(m_device_map))
@@ -339,6 +375,7 @@ void p2p_punch_server::handle_keep_alive(int send_fd,struct sockaddr_in &addr,st
         t_nat_info.ip=ip;
         t_nat_info.port=port;
         t_nat_info.device_id=device_id->second;
+        t_nat_info.local_ip=local_ip->second;
         m_device_map.insert(std::make_pair(device_id->second,t_nat_info));
     }
     else
@@ -347,6 +384,7 @@ void p2p_punch_server::handle_keep_alive(int send_fd,struct sockaddr_in &addr,st
         t_nat_info.alive_time=this->GetTimeNow();
         t_nat_info.ip=ip;
         t_nat_info.port=port;
+        t_nat_info.local_ip=local_ip->second;
     }
     message_handle::packet_buf(response,"cmd","keep_alive");
     message_handle::packet_buf(response,"status","ok");
