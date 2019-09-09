@@ -39,7 +39,8 @@ HEADERS += ../Net/Timestamp.h \
     ../p2p_punch_model/p2p_punch_client.h \
     ../Tools/parase_request.h \
     ../sensor_manager.h \
-    ../Tests/kcp_test.h
+    ../Tests/kcp_test.h \
+    ../Tests/h264_file_handle.h
 SOURCES += ../Net/Timestamp.cpp \
     ../Net/Timer.cpp \
     ../Net/TcpSocket.cpp \
@@ -72,5 +73,6 @@ SOURCES += ../Net/Timestamp.cpp \
     ../sensor_manager.cpp \
     ../examples/p2p_client.cpp \
     ../examples/p2p_server.cpp \
-    ../Tests/kcp_test.cpp
+    ../Tests/kcp_test.cpp \
+    ../Tests/h264_file_handle.cpp
 OTHER_FILES += run_helper.txt

@@ -324,12 +324,14 @@ void p2p_punch_client::handle_nat_type_probe(std::map<std::string,std::string> &
     {
         if(m_wan_ip==ip->second&&m_wan_port==port->second)
         {
+            std::cout<<"support p2p connection!"<<std::endl;
             m_p2p_flag=true;
             send_alive_packet();
             m_alive_timer_id=m_event_loop->addTimer([this](){this->send_alive_packet();return true;},ALIVE_TIME_INTERVAL);
         }
         else
         {
+            std::cout<<"not support p2p connection!"<<std::endl;
             m_wan_ip=ip->second;
             m_wan_port=port->second;
             m_event_loop->addTimer([this](){this->send_nat_type_probe_packet();return false;},ALIVE_TIME_INTERVAL);
