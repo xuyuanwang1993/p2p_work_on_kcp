@@ -24,7 +24,6 @@ KCP_Interface::KCP_Interface(int fd,unsigned int conv_id,xop::EventLoop *event_l
     m_kcp->output=kcp_output;
     m_kcp->user=this;
     m_udp_channel->enableReading();
-    m_udp_channel->enableWriting();
     m_have_cleared=false;
     //读到的数据输入kcp进行处理
     m_udp_channel->setReadCallback([this](){
@@ -82,7 +81,6 @@ KCP_Interface::KCP_Interface(std::shared_ptr<xop::Channel>channel,unsigned int c
     SetTransferMode(FAST_MODE);
     m_kcp->output=kcp_output;
     m_udp_channel->enableReading();
-    m_udp_channel->enableWriting();
     m_have_cleared=false;
     //读到的数据输入kcp进行处理
     m_udp_channel->setReadCallback([this](){
