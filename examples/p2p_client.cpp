@@ -21,12 +21,14 @@ int main(int argc,char*argv[])
     if(mode=="send")
     {
         client.setEventCallback(kcp_test::kcp_send_test);
+        client.setTcpEventCallback(kcp_test::tcp_send_callback);
 //        client.setEventCallback([](std::shared_ptr<xop::Channel> channel,int session_id){
 //            std::cout<<"session_id : "<<session_id<<std::endl;
 //        });
     }
     else
     {
+        kcp_test::tcp_listen_init(event_loop);
         client.setEventCallback(kcp_test::kcp_callback);
     }
     std::string command;
@@ -36,7 +38,9 @@ int main(int argc,char*argv[])
     {
         std::cin>>command;
         std::cout<<std::endl<<"device_id :"<<command<<std::endl;
-        client.try_establish_connection(command,channel_id++,src_name+std::to_string(channel_id));
+        //client.try_establish_connection(command,channel_id++,src_name+std::to_string(channel_id));
+        client.try_establish_active_connection(command,kcp_test::get_active_port(event_loop,1),channel_id++,src_name+std::to_string(channel_id),1);
+        //client.try_establish_active_connection(command,kcp_test::get_active_port(event_loop,0),channel_id++,src_name+std::to_string(channel_id),0);
     }
     return 0;
 }

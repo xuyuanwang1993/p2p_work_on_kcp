@@ -54,6 +54,16 @@ bool p2p_punch_client::try_establish_connection(std::string remote_device_id,int
     send_set_up_connection_packet(remote_device_id,channel_id,src_name);
     return true;
 }
+bool p2p_punch_client::try_establish_active_connection(std::string remote_device_id,int port,int channel_id,std::string src_name,int mode)
+{
+    if(!m_p2p_flag)
+    {
+        std::cout<<"can't establish_connection!"<<std::endl;
+        return false;
+    }
+    send_active_connection(remote_device_id,channel_id,src_name,port,mode);
+    return true;
+}
 
 p2p_punch_client::~p2p_punch_client()
 {
@@ -123,6 +133,10 @@ void p2p_punch_client::handle_read()
             else if(cmd->second=="punch_hole_response")
             {
                 handle_punch_hole_response(recv_map);
+            }
+            else if(cmd->second=="active_connection")
+            {
+                handle_active_connection(recv_map);
             }
             else
             {
@@ -238,6 +252,23 @@ void p2p_punch_client::send_set_up_connection_packet(std::string remote_device_i
     addr.sin_port = htons(UDP_RECV_PORT);
     ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
 }
+void p2p_punch_client::send_active_connection(std::string remote_device_id,int channel_id,std::string src_name,int port,int mode)
+{
+    std::string request;
+    message_handle::packet_buf(request,"cmd","active_connection");
+    message_handle::packet_buf(request,"device_id",m_device_id);
+    message_handle::packet_buf(request,"remote_device_id",remote_device_id);
+    message_handle::packet_buf(request,"channel_id",std::to_string(channel_id));
+    message_handle::packet_buf(request,"src_name",src_name);
+    message_handle::packet_buf(request,"port",std::to_string(port));
+    if(mode==0)message_handle::packet_buf(request,"mode","udp");
+    else message_handle::packet_buf(request,"mode","tcp");
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
+    addr.sin_port = htons(UDP_RECV_PORT);
+    ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
+}
 
 void p2p_punch_client::handle_punch_hole_response(std::map<std::string,std::string> &recv_map)//打洞成功回复
 {
@@ -299,6 +330,79 @@ void p2p_punch_client::handle_set_up_connection(std::map<std::string,std::string
         m_session_map.insert(std::make_pair(t_session.session_id,t_session));
         send_punch_hole_packet(t_session);
     }
+}
+void p2p_punch_client::handle_active_connection(std::map<std::string,std::string> &recv_map)
+{
+    auto mode=recv_map.find("mode");
+    auto session_id=recv_map.find("session_id");
+    auto channel_id=recv_map.find("channel_id");
+    auto src_name=recv_map.find("src_name");
+    auto ip=recv_map.find("ip");
+    auto port=recv_map.find("port");
+    if(mode==std::end(recv_map)||session_id==std::end(recv_map)||channel_id==std::end(recv_map)||src_name==std::end(recv_map)||\
+       ip==std::end(recv_map)||port==std::end(recv_map))return;
+    if(mode->second=="udp"&&m_connectCB)
+    {
+        udp_active_connect_task(session_id->second,channel_id->second,src_name->second,ip->second,port->second,mode->second);
+    }
+    else if(mode->second=="tcp"&&m_TcpconnectCB)
+    {
+        tcp_active_connect_task(session_id->second,channel_id->second,src_name->second,ip->second,port->second,mode->second);
+    }
+    else
+    {
+        std::cerr<<"handle_active_connection error! try check p2p_punch_client's config!"<<std::endl;
+    }
+}
+void p2p_punch_client::udp_active_connect_task(std::string session_id,std::string channel_id,std::string src_name,std::string ip,std::string port,std::string mode)
+{
+    int fd=get_udp_session_sock();
+    if(fd<0)return;
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr(ip.c_str());
+    addr.sin_port = htons(std::stoi(port));
+    ::connect(fd,(sockaddr *)&addr,sizeof addr);
+    std::string request;
+    message_handle::packet_buf(request,"cmd","set_up_connection");
+    message_handle::packet_buf(request,"session_id",session_id);
+    message_handle::packet_buf(request,"channel_id",channel_id);
+    message_handle::packet_buf(request,"src_name",src_name);
+    message_handle::packet_buf(request,"ip",ip);
+    message_handle::packet_buf(request,"port",port);
+    message_handle::packet_buf(request,"mode",mode);
+    ::send(fd,request.c_str(),request.length(),0);
+    m_connectCB(std::make_shared<xop::Channel>(fd),std::stoi(session_id),std::stoi(channel_id),src_name);
+}
+
+void p2p_punch_client::tcp_active_connect_task(std::string session_id,std::string channel_id,std::string src_name,std::string ip,std::string port,std::string mode)
+{
+    std::cout<<"tcp_active_connect_task"<<std::endl;
+    std::thread t([session_id,channel_id,src_name,ip,port,mode,this](){
+        int fd=socket(AF_INET, SOCK_STREAM, 0);
+        if(fd<0)return;
+        struct sockaddr_in addr = {0};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = inet_addr(ip.c_str());
+        addr.sin_port = htons(std::stoi(port));
+        if(::connect(fd,(sockaddr *)&addr,sizeof addr)!=0)
+        {
+            std::cerr<<"ip : "<<ip<<"  port : "<<port<<std::endl;
+            std::cerr<<strerror(errno)<<std::endl;
+            return;
+        }
+        std::string request;
+        message_handle::packet_buf(request,"cmd","set_up_connection");
+        message_handle::packet_buf(request,"session_id",session_id);
+        message_handle::packet_buf(request,"channel_id",channel_id);
+        message_handle::packet_buf(request,"src_name",src_name);
+        message_handle::packet_buf(request,"ip",ip);
+        message_handle::packet_buf(request,"port",port);
+        message_handle::packet_buf(request,"mode",mode);
+        ::send(fd,request.c_str(),request.length(),0);
+        m_TcpconnectCB(std::make_shared<xop::Channel>(fd),std::stoi(session_id),std::stoi(channel_id),src_name);
+    });
+    t.detach();
 }
 
 void p2p_punch_client::handle_keep_alive(std::map<std::string,std::string> &recv_map)//心跳保活

@@ -1,4 +1,4 @@
-﻿// PHZ
+// PHZ
 // 2018-5-15
 
 #ifndef XOP_TCP_SOCKET_H
@@ -20,7 +20,7 @@ public:
     SOCKET create();
     bool bind(std::string ip, uint16_t port);
     bool listen(int backlog);
-    SOCKET accept();
+    SOCKET accept()const;
     bool connect(std::string ip, uint16_t port, int timeout=0);
     void close();
     void shutdownWrite();

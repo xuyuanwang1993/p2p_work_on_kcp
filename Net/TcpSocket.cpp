@@ -1,4 +1,4 @@
-﻿// PHZ
+// PHZ
 // 2018-5-15
 
 #include "TcpSocket.h"
@@ -52,7 +52,7 @@ bool TcpSocket::listen(int backlog)
     return true;
 }
 
-SOCKET TcpSocket::accept()
+SOCKET TcpSocket::accept()const
 {
     struct sockaddr_in addr = {0};
     socklen_t addrlen = sizeof addr;

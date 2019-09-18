@@ -45,6 +45,7 @@ private:
     void handle_punch_hole_response(int send_fd,struct sockaddr_in &addr,std::map<std::string,std::string> &recv_map);//打洞成功回复
     void handle_punch_hole(int send_fd,struct sockaddr_in &addr,std::map<std::string,std::string> &recv_map);//打洞
     void handle_set_up_connection(int send_fd,struct sockaddr_in &addr,std::map<std::string,std::string> &recv_map);//请求连接
+    void handle_active_connection(int send_fd,struct sockaddr_in &addr,std::map<std::string,std::string> &recv_map);//处理直连请求
     void handle_keep_alive(int send_fd,struct sockaddr_in &addr,std::map<std::string,std::string> &recv_map);//心跳保活
     void handle_nat_type_probe(int send_fd,struct sockaddr_in &addr,std::map<std::string,std::string> &recv_map);//外网端口探测
     void handle_not_supported_command(int send_fd,std::string cmd,struct sockaddr_in &addr);

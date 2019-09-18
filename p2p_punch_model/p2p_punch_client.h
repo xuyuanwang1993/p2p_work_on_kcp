@@ -26,9 +26,12 @@ public:
     ~p2p_punch_client();
     void setEventCallback(const P2PEventCallback& cb)
     { m_connectCB = cb;};
+    void setTcpEventCallback(const P2PEventCallback& cb)
+    {m_TcpconnectCB=cb;};
     void start(){if(!m_p2p_flag){send_nat_type_probe_packet();};};
     bool check_is_p2p_able(){return m_p2p_flag;};
     bool try_establish_connection(std::string remote_device_id,int channel_id,std::string src_name);
+    bool try_establish_active_connection(std::string remote_device_id,int port,int channel_id,std::string src_name,int mode=0);
 private:
     int get_udp_session_sock();
     void remove_invalid_resources();
@@ -41,12 +44,16 @@ private:
     void send_low_ttl_packet(m_p2p_session &session,std::string ip,std::string port);//进行打洞操作，并connect
     void send_punch_hole_response_packet(m_p2p_session &session);
     void send_set_up_connection_packet(std::string remote_device_id,int channel_id,std::string src_name);
+    void send_active_connection(std::string remote_device_id,int channel_id,std::string src_name,int port,int mode=0);
 
     void handle_punch_hole_response(std::map<std::string,std::string> &recv_map);//打洞成功回复
     void handle_punch_hole(std::map<std::string,std::string> &recv_map);//打洞
     void handle_set_up_connection(std::map<std::string,std::string> &recv_map);//请求连接
     void handle_keep_alive(std::map<std::string,std::string> &recv_map);//心跳保活
     void handle_nat_type_probe(std::map<std::string,std::string> &recv_map);//外网端口探测
+    void handle_active_connection(std::map<std::string,std::string> &recv_map);//处理直连
+    void udp_active_connect_task(std::string session_id,std::string channel_id,std::string src_name,std::string ip,std::string port,std::string mode);
+    void tcp_active_connect_task(std::string session_id,std::string channel_id,std::string src_name,std::string ip,std::string port,std::string mode);
     int64_t GetTimeNow()
     {//ms
         auto timePoint = std::chrono::steady_clock::now();
@@ -65,6 +72,7 @@ private:
     std::atomic<bool> m_p2p_flag;//判断是否支持穿透
     std::map<int,m_p2p_session> m_session_map;
     P2PEventCallback m_connectCB;
+    P2PEventCallback m_TcpconnectCB;
 };
 
 #endif // P2P_PUNCH_CLIENT_H

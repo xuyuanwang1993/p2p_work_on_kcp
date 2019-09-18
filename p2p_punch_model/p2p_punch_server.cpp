@@ -96,6 +96,10 @@ void p2p_punch_server::handle_read()
             {
                 handle_punch_hole_response(m_server_sock[0],addr,recv_map);
             }
+            else if(cmd->second=="active_connection")
+            {
+                handle_active_connection(m_server_sock[0],addr,recv_map);
+            }
             else
             {
                 handle_not_supported_command(m_server_sock[0],cmd->second,addr);
@@ -349,6 +353,58 @@ void p2p_punch_server::handle_set_up_connection(int send_fd,struct sockaddr_in &
         message_handle::packet_buf(response,"src_name",src_name->second);
         ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
 
+        struct sockaddr_in addr2 = {0};
+        addr2.sin_family = AF_INET;
+        addr2.sin_addr.s_addr = inet_addr(remote_nat_info->second.ip.c_str());
+        addr2.sin_port = htons(std::stoi(remote_nat_info->second.port));
+        ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr2, sizeof addr2);
+    }while(0);
+}
+void p2p_punch_server::handle_active_connection(int send_fd,struct sockaddr_in &addr,std::map<std::string,std::string> &recv_map)
+{
+    std::string response;
+    do{
+        auto device_id=recv_map.find("device_id");
+        auto remote_device_id=recv_map.find("remote_device_id");
+        auto channel_id=recv_map.find("channel_id");
+        auto src_name=recv_map.find("src_name");
+        auto port=recv_map.find("port");
+        auto mode=recv_map.find("mode");
+        if(device_id==std::end(recv_map)||remote_device_id==std::end(recv_map)||src_name==std::end(recv_map)||channel_id==std::end(recv_map)\
+           ||port==std::end(recv_map)||mode==std::end(recv_map))
+        {
+            response=packet_error_response("active_connection","check the command!");
+            ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
+            break;
+        }
+        if(device_id->second==remote_device_id->second)
+        {
+            response=packet_error_response("active_connection","two peers locate the same machine!");
+            ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
+            break;
+        }
+        auto nat_info=m_device_map.find(device_id->second);
+        auto remote_nat_info=m_device_map.find(remote_device_id->second);
+        if(nat_info==std::end(m_device_map)||remote_nat_info==std::end(m_device_map))
+        {
+            response=packet_error_response("active_connection","invalid device_id!");
+            ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
+            break;
+        }
+        message_handle::packet_buf(response,"cmd","active_connection");
+        message_handle::packet_buf(response,"session_id",std::to_string(m_session_id++));
+        message_handle::packet_buf(response,"channel_id",channel_id->second);
+        message_handle::packet_buf(response,"src_name",src_name->second);
+        if(nat_info->second.ip==remote_nat_info->second.ip)
+        {
+            message_handle::packet_buf(response,"ip",nat_info->second.local_ip);
+        }
+        else
+        {
+            message_handle::packet_buf(response,"ip",nat_info->second.ip);
+        }
+        message_handle::packet_buf(response,"port",port->second);
+        message_handle::packet_buf(response,"mode",mode->second);
         struct sockaddr_in addr2 = {0};
         addr2.sin_family = AF_INET;
         addr2.sin_addr.s_addr = inet_addr(remote_nat_info->second.ip.c_str());

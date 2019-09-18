@@ -3,6 +3,9 @@
 #include <random>
 #include <memory>
 #include "h264_file_handle.h"
+#include "TcpSocket.h"
+#include "SocketUtil.h"
+#include "parase_request.h"
 void kcp_test::kcp_callback(std::shared_ptr<xop::Channel> channel,int session_id,int channel_id,std::string src_name)
 {
     std::shared_ptr<sensor_net::data_ptr> data(new sensor_net::data_ptr(channel_id,src_name));
@@ -63,3 +66,106 @@ void kcp_test::send_thread(std::shared_ptr<sensor_net::KCP_Interface> kcp_interf
         xop::Timer::sleep(40);
     }
 }
+void kcp_test::tcp_send_thread(std::shared_ptr<xop::Channel> channel)
+{
+    std::cout<<"tcp_send_thread"<<std::endl;
+    int fd=channel->fd();
+    char buf[10]={0};
+    memset(buf,'#',10);
+    std::random_device rd;
+    while(1)
+    {
+        buf[0]=33+rd()%93;
+        buf[1]=33+rd()%93;
+        if(send(fd,buf,10,0)<0)break;
+        std::cout<<"send "<<buf<<std::endl;
+        xop::Timer::sleep(40);
+    }
+    std::cout<<"tcp send exit"<<buf<<std::endl;
+}
+void kcp_test::tcp_send_callback(std::shared_ptr<xop::Channel> channel,int session_id,int channel_id,std::string src_name)
+{
+    std::thread t(&kcp_test::tcp_send_thread,channel);
+    t.detach();
+}
+
+void kcp_test::tcp_listen_init(std::shared_ptr<xop::EventLoop> loop)
+{
+    xop::TcpSocket sock;
+    sock.create();
+    xop::SocketUtil::setReuseAddr(sock.fd());
+    xop::SocketUtil::setReusePort(sock.fd());
+    xop::SocketUtil::setNonBlock(sock.fd());
+    sock.bind("0.0.0.0",TCP_CONNECT_PORT);
+    sock.listen(10);
+    std::shared_ptr<xop::Channel> channel(new xop::Channel(sock.fd()));
+    channel->setReadCallback([sock,loop](){
+        int fd=sock.accept();
+        std::cout<<"accept : "<<fd<<std::endl;
+        if(fd>0)
+        {
+            std::shared_ptr<xop::Channel> new_channel(new xop::Channel(fd));
+            new_channel->setReadCallback([new_channel,loop](){
+                char buf[512]={0};
+                int ret=recv(new_channel->fd(),buf,512,0);
+                if(ret<=0)
+                {
+                    loop->removeChannel((std::shared_ptr<xop::Channel>&)new_channel);
+                }
+                else
+                {
+                    std::cout<<"recv : "<<buf<<std::endl;
+                }
+            });
+            new_channel->enableReading();
+            loop->updateChannel(new_channel);
+        }
+    });
+    channel->enableReading();
+    loop->updateChannel(channel);
+}
+int kcp_test::get_active_port(std::shared_ptr<xop::EventLoop> loop,int mode)
+{
+    if(mode!=0)return TCP_CONNECT_PORT;
+    int fd=socket(AF_INET, SOCK_DGRAM, 0);
+    if(fd>0&&xop::SocketUtil::random_bind(fd,100))
+    {
+        xop::SocketUtil::setNonBlock(fd);
+        xop::SocketUtil::setSendBufSize(fd, 32*1024);
+        std::shared_ptr<xop::Channel> channel(new xop::Channel(fd));
+        int timer_id=loop->addTimer([loop,channel](){loop->removeChannel((std::shared_ptr<xop::Channel>&)channel);\
+                                                     std::cout<<"remove udp channel!"<<std::endl;
+                                                     return false;},5000);
+        channel->setReadCallback([fd,timer_id,loop,channel](){
+            char buf[512]={0};
+            struct sockaddr_in addr = {0};
+            socklen_t len=sizeof addr;
+            int ret=::recvfrom(fd,buf,512,0,(struct sockaddr*)&addr,&len);
+            if(ret>0)
+            {
+                std::cout<<buf<<std::endl;
+                std::cout<<"ReadCallback"<<std::endl;
+                std::map<std::string,std::string> recv_map=message_handle::parse_buf(buf);
+                auto mode=recv_map.find("mode");
+                auto session_id=recv_map.find("session_id");
+                auto channel_id=recv_map.find("channel_id");
+                auto src_name=recv_map.find("src_name");
+                auto ip=recv_map.find("ip");
+                auto port=recv_map.find("port");
+                if(mode==std::end(recv_map)||session_id==std::end(recv_map)||channel_id==std::end(recv_map)||src_name==std::end(recv_map)||\
+                   ip==std::end(recv_map)||port==std::end(recv_map))return;
+                ::connect(fd,(sockaddr *)&addr,len);
+                loop->removeTimer(timer_id);
+                kcp_test::kcp_callback(channel,std::stoi(session_id->second),std::stoi(channel_id->second),src_name->second);
+            }
+        });
+        channel->enableReading();
+        loop->updateChannel(channel);
+        return xop::SocketUtil::getLocalPort(fd);
+    }
+    else
+    {
+        return 0;
+    }
+}
+
