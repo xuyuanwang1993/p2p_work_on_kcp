@@ -56,11 +56,6 @@ bool p2p_punch_client::try_establish_connection(std::string remote_device_id,int
 }
 bool p2p_punch_client::try_establish_active_connection(std::string remote_device_id,int port,int channel_id,std::string src_name,int mode)
 {
-    if(!m_p2p_flag)
-    {
-        std::cout<<"can't establish_connection!"<<std::endl;
-        return false;
-    }
     send_active_connection(remote_device_id,channel_id,src_name,port,mode);
     return true;
 }
@@ -419,6 +414,7 @@ void p2p_punch_client::handle_nat_type_probe(std::map<std::string,std::string> &
     {
         return;
     }
+    if(m_alive_timer_id<=0)m_alive_timer_id=m_event_loop->addTimer([this](){this->send_alive_packet();return true;},ALIVE_TIME_INTERVAL);
     if(m_wan_ip==FIRST_STRING)
     {
         m_wan_ip=ip->second;
@@ -431,14 +427,12 @@ void p2p_punch_client::handle_nat_type_probe(std::map<std::string,std::string> &
             std::cout<<"support p2p connection!"<<std::endl;
             m_p2p_flag=true;
             send_alive_packet();
-            m_alive_timer_id=m_event_loop->addTimer([this](){this->send_alive_packet();return true;},ALIVE_TIME_INTERVAL);
         }
         else
         {
             std::cout<<"not support p2p connection!"<<std::endl;
             m_wan_ip=ip->second;
             m_wan_port=port->second;
-            m_event_loop->addTimer([this](){this->send_nat_type_probe_packet();return false;},ALIVE_TIME_INTERVAL);
         }
     }
 }

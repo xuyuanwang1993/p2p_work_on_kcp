@@ -14,6 +14,7 @@ class kcp_test{
     }data_ptr;
 public:
     static void kcp_callback(std::shared_ptr<xop::Channel> channel,int session_id,int channel_id,std::string src_name);
+    //下面两个函数为从KCP连接中收到包后的回调操作
     static void kcp_recvcallback(std::shared_ptr<char> buf,int len,struct IKCPCB *kcp,std::shared_ptr<sensor_net::data_ptr>data);
     static void kcp_recvcallback2(std::shared_ptr<char> buf,int len,struct IKCPCB *kcp,std::shared_ptr<sensor_net::data_ptr>data);
     static void kcp_send_test(std::shared_ptr<xop::Channel> channel,int session_id,int channel_id,std::string src_name);

@@ -90,7 +90,7 @@ void kcp_test::tcp_send_callback(std::shared_ptr<xop::Channel> channel,int sessi
 }
 
 void kcp_test::tcp_listen_init(std::shared_ptr<xop::EventLoop> loop)
-{
+{//创建TCP直连处理模块，端口需做UPNP映射或者手动端口映射
     xop::TcpSocket sock;
     sock.create();
     xop::SocketUtil::setReuseAddr(sock.fd());
@@ -103,17 +103,19 @@ void kcp_test::tcp_listen_init(std::shared_ptr<xop::EventLoop> loop)
         int fd=sock.accept();
         std::cout<<"accept : "<<fd<<std::endl;
         if(fd>0)
-        {
+        {//此处获得了一个指向目的服务器的连接
             std::shared_ptr<xop::Channel> new_channel(new xop::Channel(fd));
             new_channel->setReadCallback([new_channel,loop](){
                 char buf[512]={0};
                 int ret=recv(new_channel->fd(),buf,512,0);
                 if(ret<=0)
-                {
+                {//接收失败判断连接关闭，移除连接
                     loop->removeChannel((std::shared_ptr<xop::Channel>&)new_channel);
                 }
                 else
-                {
+                {//第一个包会携带连接信息，若对端连续发送，可能会有粘包现象
+                 //可在收到连接信息后重新调用setReadCallback修改收到数据包之后的操作
+                 //若用其它模块接收，则可调用removeChannel移除通道，同时需保存Channel信息,默认为rtsp
                     std::cout<<"recv : "<<buf<<std::endl;
                 }
             });
@@ -128,11 +130,13 @@ int kcp_test::get_active_port(std::shared_ptr<xop::EventLoop> loop,int mode)
 {
     if(mode!=0)return TCP_CONNECT_PORT;
     int fd=socket(AF_INET, SOCK_DGRAM, 0);
+    //创建udp套接字并绑定随机端口
     if(fd>0&&xop::SocketUtil::random_bind(fd,100))
     {
         xop::SocketUtil::setNonBlock(fd);
         xop::SocketUtil::setSendBufSize(fd, 32*1024);
         std::shared_ptr<xop::Channel> channel(new xop::Channel(fd));
+        //添加连接超时事件,超时时移除套接字
         int timer_id=loop->addTimer([loop,channel](){loop->removeChannel((std::shared_ptr<xop::Channel>&)channel);\
                                                      std::cout<<"remove udp channel!"<<std::endl;
                                                      return false;},5000);
@@ -142,9 +146,8 @@ int kcp_test::get_active_port(std::shared_ptr<xop::EventLoop> loop,int mode)
             socklen_t len=sizeof addr;
             int ret=::recvfrom(fd,buf,512,0,(struct sockaddr*)&addr,&len);
             if(ret>0)
-            {
+            {//
                 std::cout<<buf<<std::endl;
-                std::cout<<"ReadCallback"<<std::endl;
                 std::map<std::string,std::string> recv_map=message_handle::parse_buf(buf);
                 auto mode=recv_map.find("mode");
                 auto session_id=recv_map.find("session_id");
@@ -155,7 +158,10 @@ int kcp_test::get_active_port(std::shared_ptr<xop::EventLoop> loop,int mode)
                 if(mode==std::end(recv_map)||session_id==std::end(recv_map)||channel_id==std::end(recv_map)||src_name==std::end(recv_map)||\
                    ip==std::end(recv_map)||port==std::end(recv_map))return;
                 ::connect(fd,(sockaddr *)&addr,len);
+                //将套接字变为不活跃状态
+                loop->removeChannel((std::shared_ptr<xop::Channel>&)channel);
                 loop->removeTimer(timer_id);
+                //创建kcp连接
                 kcp_test::kcp_callback(channel,std::stoi(session_id->second),std::stoi(channel_id->second),src_name->second);
             }
         });
