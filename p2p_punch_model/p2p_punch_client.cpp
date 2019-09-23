@@ -22,6 +22,7 @@ p2p_punch_client::p2p_punch_client(std::string server_ip,std::string device_id,s
     m_p2p_flag=false;
     m_wan_ip=FIRST_STRING;
     m_wan_port=FIRST_STRING;
+    m_alive_timer_id=0;
     m_cache_timer_id=m_event_loop->addTimer([this](){this->remove_invalid_resources();return true;},CHECK_INTERVAL);//添加超时事件
 }
 

@@ -8,7 +8,7 @@
 #include "Logger.h"
 class p2p_punch_server{
     const unsigned short UDP_RECV_PORT=23333;
-    const int OFFLINE_TIME=30000;//30s
+    const int OFFLINE_TIME=65000;//65s
     const int CHECK_INTERVAL=5000;//5s
     const int SESSION_CACHE_TIME=10000;//10s
 public:
