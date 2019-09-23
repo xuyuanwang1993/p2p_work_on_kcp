@@ -183,10 +183,6 @@ void KCP_Interface::clear()
     {
         m_have_cleared=true;
         if (!m_taskScheduler->addTriggerEvent([this]() {
-            if(this->m_udp_channel)
-            {
-                this->m_taskScheduler->removeChannel(this->m_udp_channel);
-            }
             if(this->m_clear_CB)
             {
                 this->m_clear_CB();
@@ -194,10 +190,6 @@ void KCP_Interface::clear()
         }))
         {
             this->m_taskScheduler->addTimer([this]() {
-                if(this->m_udp_channel)
-                {
-                    this->m_taskScheduler->removeChannel(this->m_udp_channel);
-                }
                 if(this->m_clear_CB)
                 {
                     this->m_clear_CB();
@@ -215,6 +207,10 @@ bool KCP_Interface::CheckTransWindow()
 
 KCP_Interface::~KCP_Interface()
 {
+    if(this->m_udp_channel)
+    {
+        this->m_taskScheduler->removeChannel(this->m_udp_channel);
+    }
     ikcp_release(m_kcp);
 }
 std::shared_ptr<KCP_Interface> KCP_Manager::AddConnection(int fd,std::string ip,int port,unsigned int conv_id,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size)
@@ -251,7 +247,15 @@ void KCP_Manager::StartUpdateLoop()
 {
     m_event_loop->getTaskScheduler()->addTimer(std::bind(&sensor_net::KCP_Manager::UpdateLoop,this),10);
 }
-
+void KCP_Manager::CloseConnection(int conv_id)
+{//移除连接
+    if(!m_init)return ;
+    std::lock_guard<std::mutex> locker(m_mutex);
+    if(m_kcp_map.find(conv_id)!=std::end(m_kcp_map))
+    {
+        m_kcp_map.erase(conv_id);
+    }
+}
 bool KCP_Manager::UpdateLoop()
 {
     std::unordered_map<int,std::shared_ptr<KCP_Interface>> tmp_map;
@@ -259,7 +263,7 @@ bool KCP_Manager::UpdateLoop()
         std::lock_guard<std::mutex> locker(m_mutex);
         tmp_map=m_kcp_map;
     }
-    for(auto i : m_kcp_map)
+    for(auto i : tmp_map)
     {
         i.second->Update(KCP_Manager::GetTimeNow());
     }

@@ -21,7 +21,7 @@ void kcp_test::kcp_send_test(std::shared_ptr<xop::Channel> channel,int session_i
 
 void kcp_test::kcp_recvcallback(std::shared_ptr<char> buf,int len,struct IKCPCB *kcp,std::shared_ptr<sensor_net::data_ptr>data)
 {
-    std::cout<<"conv_id : "<<kcp->conv<<" recv_len :"<<len<<"    info :"<<data->channel_id<<"   "<<data->src_name<<std::endl;
+    //std::cout<<"conv_id : "<<kcp->conv<<" recv_len :"<<len<<"    info :"<<data->channel_id<<"   "<<data->src_name<<std::endl;
     ikcp_send(kcp,buf.get(),len);
 }
 void kcp_test::kcp_recvcallback2(std::shared_ptr<char> buf,int len,struct IKCPCB *kcp,std::shared_ptr<sensor_net::data_ptr>data)

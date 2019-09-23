@@ -57,9 +57,9 @@ namespace sensor_net{
         void SetLostConnectionCallback(const LostConnectionCallback &cb){m_lost_connectionCB=cb;};
         ~KCP_Interface();
          bool GetInterfaceIsValid(){return m_have_cleared?false:true;};
+         void clear();
     private:
         bool CheckTransWindow();
-        void clear();
         std::shared_ptr<xop::BufferReader> m_readBufferPtr;
         std::shared_ptr<xop::Channel> m_udp_channel;
         struct IKCPCB *m_kcp;
@@ -79,13 +79,13 @@ namespace sensor_net{
         {
             auto timePoint = std::chrono::steady_clock::now();
             return std::chrono::duration_cast<std::chrono::milliseconds>(timePoint.time_since_epoch()).count();
-        }
+        };
 
         static KCP_Manager &GetInstance()
         {//单例模式
             static KCP_Manager manager;
             return manager;
-        }
+        };
         void Config(xop::EventLoop *event_loop)
         {
             if(!m_init&&event_loop)
@@ -93,7 +93,7 @@ namespace sensor_net{
                 m_init=true;
                 m_event_loop=event_loop;
             }
-        }
+        };
         std::shared_ptr<KCP_Interface> AddConnection(int fd,std::string ip,int port,unsigned int conv_id,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size=32);
         std::shared_ptr<KCP_Interface> AddConnection(std::shared_ptr<xop::Channel> channel,unsigned int conv_id,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size=32);
         std::shared_ptr<KCP_Interface>GetConnectionHandle(int conv_id)
@@ -103,16 +103,8 @@ namespace sensor_net{
             auto iter=m_kcp_map.find(conv_id);
             if(iter!=std::end(m_kcp_map))return iter->second;
             return nullptr;
-        }
-        void CloseConnection(int conv_id)
-        {//移除连接
-            if(!m_init)return ;
-            std::lock_guard<std::mutex> locker(m_mutex);
-            if(m_kcp_map.find(conv_id)!=std::end(m_kcp_map))
-            {
-                m_kcp_map.erase(conv_id);
-            }
-        }
+        };
+        void CloseConnection(int conv_id);
         void StartUpdateLoop();
     private:
         bool UpdateLoop();
