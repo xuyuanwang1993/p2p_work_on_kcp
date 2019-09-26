@@ -73,6 +73,7 @@ void TimerQueue::handleTimerEvent()
             }
             else		
             {
+                _events.erase(_events.begin());
                 _timers.erase(timerId);
             }
         }	
