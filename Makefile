@@ -9,11 +9,11 @@ APP_SUFIX =.cpp
 OBJS_PATH = $(OUT_DIR)/objs
 ifndef CROSS_COMPILE
 TIPS=You can run \"make\" command with the given CROSS_COMPILE like \"make -f Makefile.cross CROSS_COMPILE=/test/bin/\" \
-default \"CROSS_COMPILE=/usr/local/bin/\"
+default \"CROSS_COMPILE=/usr/bin/\"
 else
 TIPS=CROSS_COMPILE :$(CROSS_COMPILE)
 endif
-CROSS_COMPILE ?= /usr/local/bin/
+CROSS_COMPILE ?= /usr/bin/
 CXX   = $(CROSS_COMPILE)g++
 CC    = $(CROSS_COMPILE)gcc
 STRIP = $(CROSS_COMPILE)strip
