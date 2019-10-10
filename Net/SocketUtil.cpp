@@ -57,7 +57,7 @@ void SocketUtil::setRecvBlockTime(SOCKET fd,int ms)
     struct timeval tv = {ms/1000, (ms%1000)*1000};
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (char*)&tv, sizeof tv);
 #elif defined(WIN32) || defined(_WIN32)
-    unsigned long tmp = (unsigned long)writeTimeout;
+    unsigned long tmp = (unsigned long)ms;
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&tmp, sizeof(unsigned long));
 #endif
 #endif

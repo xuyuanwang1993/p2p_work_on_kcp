@@ -71,13 +71,8 @@ int Pipe::read(void *buf, int len)
 
 void Pipe::close()
 {
-#if defined(WIN32) || defined(_WIN32) 
-    closesocket(_pipefd[0]);
-    closesocket(_pipefd[1]);
-#elif defined(__linux) || defined(__linux__) 
-    ::close(_pipefd[0]);
-    ::close(_pipefd[1]);
-#endif
+	::CloseSocket(_pipefd[0]);
+	::CloseSocket(_pipefd[1]);
 
 }
 

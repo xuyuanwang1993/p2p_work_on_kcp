@@ -24,8 +24,9 @@
 #define SOCKET int
 #define INVALID_SOCKET  (-1)
 #define SOCKET_ERROR    (-1) 
-
+#define CloseSocket	close
 #elif defined(WIN32) || defined(_WIN32) 
+#define CloseSocket closesocket
 #define FD_SETSIZE      1024
 #define WIN32_LEAN_AND_MEAN
 #define _WINSOCK_DEPRECATED_NO_WARNINGS

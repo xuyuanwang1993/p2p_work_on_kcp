@@ -1,14 +1,9 @@
 #include "http_client.h"
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <unistd.h>
 #include <string.h>
 #include <string>
 #include <stdlib.h>
 #include <errno.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/select.h>
+#include "Socket.h"
 #include "Logger.h"
 //using std::string;
 http_client::http_client()
@@ -21,7 +16,7 @@ http_client::~http_client()
 {
     if(m_fd>0)
     {
-        close(m_fd);
+		CloseSocket(m_fd);
     }
 }
 int http_client::Get_Http_Ack(std::string &ack)//阻塞执行 超时5秒
@@ -78,7 +73,7 @@ int http_client::Get_Http_Ack(std::string &ack)//阻塞执行 超时5秒
         ret=0;
     }while(0);
     if(m_fd>0) {
-        close(m_fd);
+		CloseSocket(m_fd);
         m_fd=-1;
     }
     return ret;
@@ -140,7 +135,7 @@ int http_client::connect_to_server()//返回连接套接字
         LOG_ERROR("set socket error! %s",strerror(errno));
         if(fd>0)
         {
-            close(fd);
+			CloseSocket(fd);
         }
         return -1;
     }
@@ -152,7 +147,7 @@ int http_client::connect_to_server()//返回连接套接字
     {
         http_client::m_url_cache.erase(m_url);
         LOG_ERROR("connect to %s %d error! %s",m_host_ip.c_str(),atoi(m_host_port.c_str()),strerror(errno));
-        close(fd);
+		CloseSocket(fd);
         fd=-1;
     }
     return fd;
