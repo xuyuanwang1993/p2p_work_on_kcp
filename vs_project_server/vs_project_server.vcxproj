@@ -74,7 +74,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>F:\xuyuanwang\lightning\GITHUB\p2p_work_on_kcp;F:\xuyuanwang\lightning\GITHUB\p2p_work_on_kcp\Tools;F:\xuyuanwang\lightning\GITHUB\p2p_work_on_kcp\Tests;F:\xuyuanwang\lightning\GITHUB\p2p_work_on_kcp\p2p_punch_model;F:\xuyuanwang\lightning\GITHUB\p2p_work_on_kcp\Net;F:\xuyuanwang\lightning\GITHUB\p2p_work_on_kcp\examples;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Tools;..\Tests;..\p2p_punch_model;..\Net;..\examples;..\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
@@ -83,6 +83,8 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>..\Tools;..\Tests;..\p2p_punch_model;..\Net;..\examples;..\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
