@@ -348,7 +348,7 @@ void UpnpMapper::Init(xop::EventLoop *event_loop,string lgd_ip)
     m_udp_channel->enableReading();
     m_udp_channel->setReadCallback([this](){
         struct sockaddr_in addr = {0};
-        socklen_t addr_len;
+        socklen_t addr_len=sizeof addr;
         char buf[4096]={0};
         int len=recvfrom(this->m_udp_channel->fd(),buf,4096,0,(struct sockaddr *)&addr,(socklen_t *)&addr_len);
         if(len>0)
