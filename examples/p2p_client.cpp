@@ -1,7 +1,8 @@
-#include "p2p_punch_client.h"
+﻿#include "p2p_punch_client.h"
 #include <stdlib.h>
 #include "kcp_manage.h"
 #include "kcp_test.h"
+#if 0
 int main(int argc,char*argv[])
 {
     if(argc<4)
@@ -62,10 +63,10 @@ int main(int argc,char*argv[])
             std::cin>>src_name;
             std::cout<<src_name<<std::endl;
             //普通kcp连接
-            client.try_establish_connection(device_id,channel_id++,src_name);
-            //client.try_establish_active_connection(command,kcp_test::get_active_port(event_loop,1),channel_id++,src_name+std::to_string(channel_id),1);
+            //client.try_establish_connection(device_id,channel_id++,src_name);
+            //client.try_establish_active_connection(device_id,kcp_test::get_active_port(event_loop,1),channel_id++,src_name+std::to_string(channel_id),1);
             //kcp反向连接
-            //client.try_establish_active_connection(command,kcp_test::get_active_port(event_loop,0),channel_id++,src_name+std::to_string(channel_id),0);
+            client.try_establish_active_connection(device_id,kcp_test::get_active_port(event_loop,0),channel_id++,src_name+std::to_string(channel_id),0);
         }
         else
         {
@@ -74,3 +75,30 @@ int main(int argc,char*argv[])
     }
     return 0;
 }
+#else
+// server_id,device_id,mode
+int main(int argc,char *argv[])
+{
+    if(argc<4)
+    {
+        std::cout<<"check command!"<<std::endl;
+        exit(-1);
+    }
+    std::shared_ptr<xop::EventLoop>event_loop(new xop::EventLoop(1));
+    p2p_punch_client client(argv[1],argv[2],event_loop);
+    std::thread t(std::bind(&xop::EventLoop::loop,event_loop));
+    t.detach();
+    std::string mode=argv[3];
+    if(mode=="server")
+    {
+        client.stream_server_init("server.ini",[](){std::cout<<"server exit"<<std::endl;});
+    }
+    else {
+        client.stream_client_init("qwer",4,[](std::string ip,int port){std::cout<<ip<<":"<<port<<std::endl;});
+    }
+    client.start_stream_check_task();
+    client.start();
+    while(getchar()!='8')continue;
+    return 0;
+}
+#endif

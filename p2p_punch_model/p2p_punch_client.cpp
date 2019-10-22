@@ -1,12 +1,54 @@
-#include "p2p_punch_client.h"
+﻿#include "p2p_punch_client.h"
 #include <assert.h>
 #include "parase_request.h"
 #include "NetInterface.h"
 #define FIRST_STRING "first"
 #define UDP_SND_BUF_SIZE (32*1024)
+typedef enum{
+    CLIENT_BEGIN=0,
+    CLIENT_NAT_TYPE_PROBE,
+    CLIENT_KEEP_ALIVE,
+    CLIENT_SET_UP_CONNECTION,
+    CLINET_PUNCH_HOLE_RESPONSE,
+    CLIENT_ACTIVE_CONNECTION,
+    CLIENT_GET_STREAM_SERVER_INFO,
+    CLIENT_RESET_STREAM_STATE,
+    CLIENT_RESTART_DEVICE,
+    CLIENT_GET_EXTERNAL_IP,
+    CLIENT_STREAM_SERVER_REGISTER,
+    CLIENT_RESTART_STREAM_SERVER,
+    CLIENT_STREAM_SERVER_KEEPALIVE,
+    CLIENT_END,
+}CLIENT_COMMAND;
+static const char COMMAND_LIST[][64]={
+    "begin",
+    "nat_type_probe",
+    "keep_alive",
+    "set_up_connection",
+    "punch_hole_response",
+    "active_connection",
+    "get_stream_server_info",
+    "reset_stream_state",
+    "restart_device",
+    "get_external_ip",
+    "stream_server_register",
+    "restart_stream_server",
+    "stream_server_keepalive",
+    "end",
+};
+std::unordered_map<std::string,int> p2p_punch_client::m_command_map;
 p2p_punch_client::p2p_punch_client(std::string server_ip,std::string device_id,std::shared_ptr<xop::EventLoop> event_loop)
     :m_server_ip(server_ip),m_device_id(device_id),m_event_loop(event_loop)
 {
+    static std::once_flag oc_init;
+    std::call_once(oc_init, [] {
+        CLIENT_COMMAND cmd=static_cast<CLIENT_COMMAND>(CLIENT_BEGIN+1);
+        while(cmd!=CLIENT_END)
+        {
+            m_command_map.insert(std::make_pair(std::string(COMMAND_LIST[cmd]),static_cast<int>(cmd)));
+            cmd=static_cast<CLIENT_COMMAND>(cmd+1);
+        }
+    });
     assert(m_event_loop.get());
     assert(!m_server_ip.empty()&&!m_device_id.empty());
     m_client_sock=socket(AF_INET, SOCK_DGRAM, 0);
@@ -45,6 +87,95 @@ p2p_punch_client::p2p_punch_client()
     m_wan_port=FIRST_STRING;
     m_cache_timer_id=m_event_loop->addTimer([this](){this->remove_invalid_resources();return true;},CHECK_INTERVAL);//添加超时事件
 }
+void p2p_punch_client::stream_client_init(std::string account_name,int load_size,ResetStreamServerCallback cb)
+{
+    if(m_stream_server_info)return;
+    m_stream_server_info.reset(new stream_server_info);
+    m_stream_server_info->account_name=account_name;
+    m_stream_server_info->load_size=std::to_string(load_size);
+    m_stream_server_info->mode=STREAM_CLIENT;
+    m_resetstreamserverCB=cb;
+}
+void p2p_punch_client::stream_server_init(std::string path,RestartStreamServerCallback cb)
+{
+    if(m_stream_server_info)return;
+    m_restartstreamserverCB=cb;
+    m_stream_server_info.reset(new stream_server_info);
+    m_stream_server_info->mode=STREAM_SERVER;
+    FILE *fp=fopen(path.c_str(),"r");
+    if(!fp)return;
+    do{
+        if(fseek(fp,0,SEEK_END)!=0)break;
+        long len=ftell(fp);
+        if(len<=0)break;
+        if(fseek(fp,0,SEEK_SET)!=0)break;
+        std::shared_ptr<char> buf(new char[static_cast<size_t>(len+1)]);
+        size_t ret=fread(buf.get(),1,static_cast<size_t>(len),fp);
+        if(ret!=static_cast<size_t>(len))break;
+        auto message_map=message_handle::parse_buf(buf.get());
+        auto load_size=message_map.find("load_size");
+        auto internal_port=message_map.find("internal_port");
+        auto external_port=message_map.find("external_port");
+        auto account_name=message_map.find("account_name");
+        auto igd_ip=message_map.find("igd_ip");
+
+        if(load_size==message_map.end()||internal_port==message_map.end()||external_port==message_map.end()\
+                ||account_name==message_map.end()||igd_ip==message_map.end())break;
+        m_stream_server_info->load_size=load_size->second;
+        m_stream_server_info->internal_port=internal_port->second;
+        m_stream_server_info->external_port=external_port->second;
+        m_stream_server_info->account_name=account_name->second;
+        std::string s_igd_ip=igd_ip->second;
+        upnp::UpnpMapper::Instance().Init(m_event_loop.get(),s_igd_ip);
+        std::cout<<"stream_server init success!"<<std::endl;
+    }while(0);
+    fclose(fp);
+}
+void p2p_punch_client::start_stream_check_task()
+{
+    if(!m_stream_server_info||m_stream_server_info->check_task)return;
+    m_stream_server_info->check_task=true;
+    if(m_stream_server_info->mode==STREAM_CLIENT)
+    {
+        send_get_stream_server_info();
+        m_event_loop->addTimer([this](){
+        this->send_get_stream_server_info();
+        return true;},ALIVE_TIME_INTERVAL*2);
+    }
+    else {
+        m_event_loop->addTimer([this](){
+            upnp::UpnpMapper::Instance().Api_addportMapper(upnp::SOCKET_TCP,xop::NetInterface::getLocalIPAddress(),std::stoi(this->m_stream_server_info->internal_port),\
+                                                           std::stoi(m_stream_server_info->external_port),"stream_server");
+            return false;},2000);
+        m_event_loop->addTimer([this](){
+        auto func=[this](bool status){
+            if(!status)
+            {
+                upnp::UpnpMapper::Instance().Api_addportMapper(upnp::SOCKET_TCP,xop::NetInterface::getLocalIPAddress(),std::stoi(this->m_stream_server_info->internal_port),\
+                                                               std::stoi(m_stream_server_info->external_port),"stream_server");
+            }
+        };
+        if( upnp::UpnpMapper::Instance().Api_discoverOk())
+        {
+            upnp::UpnpMapper::Instance().Api_GetSpecificPortMappingEntry(upnp::SOCKET_TCP,std::stoi(m_stream_server_info->external_port),func);
+        }
+        return true;},ALIVE_TIME_INTERVAL*10);
+    }
+}
+void p2p_punch_client::start()
+{
+    if(!m_p2p_flag)
+    {
+        if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
+        {
+            send_stream_server_register();
+            this->m_event_loop->addTimer([this](){this->send_stream_server_keepalive();return true;},ALIVE_TIME_INTERVAL);
+            m_p2p_flag=true;
+            return;
+        }
+        send_nat_type_probe_packet();
+    }
+}
 bool p2p_punch_client::try_establish_connection(std::string remote_device_id,int channel_id,std::string src_name)
 {
     if(!m_p2p_flag)
@@ -63,6 +194,13 @@ bool p2p_punch_client::try_establish_active_connection(std::string remote_device
 
 p2p_punch_client::~p2p_punch_client()
 {
+    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
+    {
+        if(upnp::UpnpMapper::Instance().Api_discoverOk())
+        {
+            upnp::UpnpMapper::Instance().Api_deleteportMapper(upnp::SOCKET_TCP,std::stoi(m_stream_server_info->external_port));
+        }
+    }
     if(m_cache_timer_id>0)
     {
         m_event_loop->removeTimer(m_cache_timer_id);
@@ -114,29 +252,59 @@ void p2p_punch_client::handle_read()
         auto cmd=recv_map.find("cmd");
         if(cmd!=std::end(recv_map))
         {
-            if(cmd->second=="nat_type_probe")
-            {
-                handle_nat_type_probe(recv_map);
-            }
-            else if(cmd->second=="keep_alive")
-            {
-                handle_keep_alive(recv_map);
-            }
-            else if(cmd->second=="set_up_connection")
-            {
-                handle_set_up_connection(recv_map);
-            }
-            else if(cmd->second=="punch_hole_response")
-            {
-                handle_punch_hole_response(recv_map);
-            }
-            else if(cmd->second=="active_connection")
-            {
-                handle_active_connection(recv_map);
-            }
-            else
+            auto command_name=m_command_map.find(cmd->second);
+            if(command_name==std::end(m_command_map))
             {
                 LOG_INFO("recv false command!");
+            }
+            else {
+                switch(command_name->second)
+                {
+                case CLIENT_NAT_TYPE_PROBE:
+                    handle_nat_type_probe(recv_map);
+                    break;
+                case CLIENT_KEEP_ALIVE:
+                    handle_keep_alive(recv_map);
+                    break;
+                case CLIENT_SET_UP_CONNECTION:
+                    handle_set_up_connection(recv_map);
+                    break;
+                case CLINET_PUNCH_HOLE_RESPONSE:
+                    handle_punch_hole_response(recv_map);
+                    break;
+                case CLIENT_ACTIVE_CONNECTION:
+                    handle_active_connection(recv_map);
+                    break;
+                case CLIENT_GET_STREAM_SERVER_INFO:
+                    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_CLIENT)
+                        handle_get_stream_server_info(recv_map);
+                    break;
+                case CLIENT_RESET_STREAM_STATE:
+                    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_CLIENT)
+                        handle_reset_stream_state();
+                    break;
+                case CLIENT_RESTART_DEVICE:
+                    if(!m_stream_server_info||m_stream_server_info->mode!=STREAM_SERVER)
+                        handle_restart_device();
+                case CLIENT_GET_EXTERNAL_IP:
+                    handle_get_external_ip(recv_map);
+                    break;
+                case CLIENT_STREAM_SERVER_REGISTER:
+                    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
+                        handle_stream_server_register(recv_map);
+                    break;
+                case CLIENT_RESTART_STREAM_SERVER:
+                    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
+                        handle_restart_stream_server();
+                    break;
+                case CLIENT_STREAM_SERVER_KEEPALIVE:
+                    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
+                        handle_stream_server_keepalive();
+                    break;
+                default:
+                    LOG_INFO("unknown command!");
+                    break;
+                }
             }
         }
     }
@@ -171,6 +339,10 @@ void p2p_punch_client::send_alive_packet()
     message_handle::packet_buf(request,"cmd","keep_alive");
     message_handle::packet_buf(request,"device_id",m_device_id);
     message_handle::packet_buf(request,"local_ip",xop::NetInterface::getLocalIPAddress());
+    if(m_stream_server_info)
+    {
+        message_handle::packet_buf(request,"stream_server_id",m_stream_server_info->stream_server_id);
+    }
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
@@ -265,7 +437,70 @@ void p2p_punch_client::send_active_connection(std::string remote_device_id,int c
     addr.sin_port = htons(UDP_RECV_PORT);
     ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
 }
-
+void p2p_punch_client::send_get_stream_server_info()
+{
+    if(!m_stream_server_info&&m_stream_server_info->mode!=STREAM_CLIENT)return;
+    std::string request;
+    message_handle::packet_buf(request,"cmd","get_stream_server_info");
+    message_handle::packet_buf(request,"device_id",m_device_id);
+    message_handle::packet_buf(request,"stream_server_id",m_stream_server_info->stream_server_id);
+    message_handle::packet_buf(request,"account_name",m_stream_server_info->account_name);
+    message_handle::packet_buf(request,"load_size",m_stream_server_info->load_size);
+    if(std::stoi(m_stream_server_info->stream_server_id)>=0)
+    {
+        message_handle::packet_buf(request,"in_use","true");
+    }
+    else {
+        message_handle::packet_buf(request,"in_use","false");
+    }
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
+    addr.sin_port = htons(UDP_RECV_PORT);
+    ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
+}
+void p2p_punch_client::send_get_external_ip()
+{
+    std::string request;
+    message_handle::packet_buf(request,"cmd","get_external_ip");
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
+    addr.sin_port = htons(UDP_RECV_PORT);
+    ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
+}
+void p2p_punch_client::send_stream_server_register()
+{
+    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER&&m_stream_server_info->stream_server_id=="-1")
+    {
+        std::string request;
+        message_handle::packet_buf(request,"cmd","stream_server_register");
+        message_handle::packet_buf(request,"account_name",m_stream_server_info->account_name);
+        message_handle::packet_buf(request,"max_load_size",m_stream_server_info->load_size);
+        struct sockaddr_in addr = {0};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
+        addr.sin_port = htons(UDP_RECV_PORT);
+        ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
+    }
+}
+void p2p_punch_client::send_stream_server_keepalive()
+{
+    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER&&m_stream_server_info->stream_server_id!="-1")
+    {
+        std::string request;
+        message_handle::packet_buf(request,"cmd","stream_server_keepalive");
+        message_handle::packet_buf(request,"stream_server_id",m_stream_server_info->stream_server_id);
+        message_handle::packet_buf(request,"external_port",m_stream_server_info->external_port);
+        message_handle::packet_buf(request,"internal_port",m_stream_server_info->internal_port);
+        message_handle::packet_buf(request,"internal_ip",xop::NetInterface::getLocalIPAddress());
+        struct sockaddr_in addr = {0};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
+        addr.sin_port = htons(UDP_RECV_PORT);
+        ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
+    }
+}
 void p2p_punch_client::handle_punch_hole_response(std::map<std::string,std::string> &recv_map)//打洞成功回复
 {
     auto session_id=recv_map.find("session_id");
@@ -336,7 +571,7 @@ void p2p_punch_client::handle_active_connection(std::map<std::string,std::string
     auto ip=recv_map.find("ip");
     auto port=recv_map.find("port");
     if(mode==std::end(recv_map)||session_id==std::end(recv_map)||channel_id==std::end(recv_map)||src_name==std::end(recv_map)||\
-       ip==std::end(recv_map)||port==std::end(recv_map))return;
+            ip==std::end(recv_map)||port==std::end(recv_map))return;
     if(mode->second=="udp"&&m_connectCB)
     {
         udp_active_connect_task(session_id->second,channel_id->second,src_name->second,ip->second,port->second,mode->second);
@@ -349,6 +584,77 @@ void p2p_punch_client::handle_active_connection(std::map<std::string,std::string
     {
         std::cerr<<"handle_active_connection error! try check p2p_punch_client's config!"<<std::endl;
     }
+}
+void p2p_punch_client::handle_get_stream_server_info(std::map<std::string,std::string> &recv_map)
+{
+    auto stream_server_id=recv_map.find("stream_server_id");
+    if(stream_server_id==recv_map.end()||std::stoi(stream_server_id->second)<0)return;
+    auto external_ip=recv_map.find("external_ip");
+    auto external_port=recv_map.find("external_port");
+    auto internal_ip=recv_map.find("internal_ip");
+    auto internal_port=recv_map.find("internal_port");
+    auto lan_flag=recv_map.find("lan_flag");
+    m_stream_server_info->stream_server_id=stream_server_id->second;
+    if(lan_flag->second=="true")
+    {
+        if(internal_ip->second!=m_stream_server_info->internal_ip||internal_port->second!=m_stream_server_info->internal_port)
+        {
+            m_stream_server_info->internal_ip=internal_ip->second;
+            m_stream_server_info->internal_port=internal_port->second;
+            if(m_resetstreamserverCB)m_resetstreamserverCB(m_stream_server_info->internal_ip,std::stoi(m_stream_server_info->internal_port));
+        }
+    }
+    else {
+        if(external_ip->second!=m_stream_server_info->external_ip||external_ip->second!=m_stream_server_info->external_port)
+        {
+            m_stream_server_info->external_ip=external_ip->second;
+            m_stream_server_info->external_port=external_port->second;
+            if(m_resetstreamserverCB)m_resetstreamserverCB(m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port));
+        }
+    }
+}
+void p2p_punch_client::handle_reset_stream_state()
+{
+    m_stream_server_info->internal_ip="";
+    m_stream_server_info->internal_port="0";
+    m_stream_server_info->external_ip="";
+    m_stream_server_info->external_port="";
+    m_stream_server_info->stream_server_id="-1";
+    if(m_resetstreamserverCB)m_resetstreamserverCB("0.0.0.0",0);
+}
+void p2p_punch_client::handle_restart_device()
+{
+    std::cout<<"restart test!"<<std::endl;
+    //    system("reboot");
+}
+void p2p_punch_client::handle_get_external_ip(std::map<std::string,std::string> &recv_map)
+{
+    auto external_ip=recv_map.find("external_ip");
+    if(external_ip==recv_map.end())return;
+    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
+    {
+        m_stream_server_info->external_ip=external_ip->second;
+    }
+}
+void p2p_punch_client::handle_stream_server_register(std::map<std::string,std::string> &recv_map)
+{
+    if(m_stream_server_info->stream_server_id=="-1")
+    {
+        auto stream_server_id=recv_map.find("stream_server_id");
+        if(stream_server_id==recv_map.end())return;
+        m_stream_server_info->stream_server_id=stream_server_id->second;
+    }
+}
+void p2p_punch_client::handle_restart_stream_server()
+{
+    std::cout<<"handle_restart_stream_server"<<std::endl;
+    m_stream_server_info->stream_server_id="-1";
+    if(m_restartstreamserverCB)m_restartstreamserverCB();
+    send_stream_server_register();
+}
+void p2p_punch_client::handle_stream_server_keepalive()
+{
+    std::cout<<"handle_stream_server_keepalive"<<std::endl;
 }
 void p2p_punch_client::udp_active_connect_task(std::string session_id,std::string channel_id,std::string src_name,std::string ip,std::string port,std::string mode)
 {
