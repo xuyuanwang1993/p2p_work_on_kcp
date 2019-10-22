@@ -99,6 +99,9 @@
     <ClCompile Include="..\Tools\Tools.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\Tools\upnpmapper.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Net\Acceptor.h">
@@ -195,6 +198,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\Tools\Tools.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Tools\upnpmapper.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

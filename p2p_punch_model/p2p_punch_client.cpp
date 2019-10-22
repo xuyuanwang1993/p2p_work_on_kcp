@@ -111,7 +111,9 @@ void p2p_punch_client::stream_server_init(std::string path,RestartStreamServerCa
         if(fseek(fp,0,SEEK_SET)!=0)break;
         std::shared_ptr<char> buf(new char[static_cast<size_t>(len+1)]);
         size_t ret=fread(buf.get(),1,static_cast<size_t>(len),fp);
+#if defined(__linux) || defined(__linux__) 
         if(ret!=static_cast<size_t>(len))break;
+#endif
         auto message_map=message_handle::parse_buf(buf.get());
         auto load_size=message_map.find("load_size");
         auto internal_port=message_map.find("internal_port");

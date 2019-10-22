@@ -142,6 +142,7 @@
     <ClCompile Include="..\Tools\MD5.c" />
     <ClCompile Include="..\Tools\parase_request.cpp" />
     <ClCompile Include="..\Tools\Tools.cpp" />
+    <ClCompile Include="..\Tools\upnpmapper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Net\Acceptor.h" />
@@ -176,6 +177,7 @@
     <ClInclude Include="..\Tools\MD5.h" />
     <ClInclude Include="..\Tools\parase_request.h" />
     <ClInclude Include="..\Tools\Tools.h" />
+    <ClInclude Include="..\Tools\upnpmapper.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
