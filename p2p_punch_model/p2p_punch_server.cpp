@@ -180,6 +180,18 @@ void p2p_punch_server::remove_invalid_resources()
                 i->second.erase(j++);
             }
             else {
+                for(auto k=std::begin(j->second.device_load_size_map);k!=std::end(j->second.device_load_size_map);)
+                {//移除无效设备
+                    auto device_info=m_device_map.find(k->first);
+                    if(device_info==std::end(m_device_map)||std::stoi(device_info->second.stream_server_id)!=j->second.id)
+                    {
+                        j->second.available_load_size+=k->second;
+                        j->second.device_load_size_map.erase(k++);
+                    }
+                    else {
+                        k++;
+                    }
+                }
                 j++;
             }
         }
