@@ -94,7 +94,7 @@ int main(int argc,char *argv[])
         client.stream_server_init("server.ini",[](){std::cout<<"server exit"<<std::endl;});
     }
     else {
-        client.stream_client_init("qwer",4,[](std::string ip,int port){std::cout<<ip<<":"<<port<<std::endl;});
+        client.stream_client_init("qwer",4,[](std::string ip,int port,std::string external_ip,int external_port){std::cout<<ip<<":"<<port<<std::endl;});
     }
     client.start_stream_check_task();
     client.start();

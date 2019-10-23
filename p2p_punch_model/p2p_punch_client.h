@@ -13,7 +13,7 @@ public:
         STREAM_CLIENT
     }STREAM_SERVER_MODEL;
     typedef std::function<void(std::shared_ptr<xop::Channel>,int,int,std::string)> P2PEventCallback;
-    typedef std::function<void(std::string,int)>ResetStreamServerCallback;//ip,port
+    typedef std::function<void(std::string,int,std::string,int)>ResetStreamServerCallback;//ip,port external_ip:external_port
     typedef  std::function<void()>RestartStreamServerCallback;
 private:
     const unsigned short UDP_RECV_PORT=23333;

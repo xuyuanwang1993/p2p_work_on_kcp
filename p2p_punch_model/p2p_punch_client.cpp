@@ -597,21 +597,21 @@ void p2p_punch_client::handle_get_stream_server_info(std::map<std::string,std::s
     auto internal_port=recv_map.find("internal_port");
     auto lan_flag=recv_map.find("lan_flag");
     m_stream_server_info->stream_server_id=stream_server_id->second;
-    if(lan_flag->second=="true")
+    if(internal_ip->second!=m_stream_server_info->internal_ip||internal_port->second!=m_stream_server_info->internal_port\
+    ||external_ip->second!=m_stream_server_info->external_ip||external_port->second!=m_stream_server_info->external_port)
     {
-        if(internal_ip->second!=m_stream_server_info->internal_ip||internal_port->second!=m_stream_server_info->internal_port)
+        m_stream_server_info->internal_ip=internal_ip->second;
+        m_stream_server_info->internal_port=internal_port->second;
+        m_stream_server_info->external_ip=external_ip->second;
+        m_stream_server_info->external_port=external_port->second;
+        if(lan_flag->second=="true")
         {
-            m_stream_server_info->internal_ip=internal_ip->second;
-            m_stream_server_info->internal_port=internal_port->second;
-            if(m_resetstreamserverCB)m_resetstreamserverCB(m_stream_server_info->internal_ip,std::stoi(m_stream_server_info->internal_port));
+            if(m_resetstreamserverCB)m_resetstreamserverCB(m_stream_server_info->internal_ip,std::stoi(m_stream_server_info->internal_port),\
+            m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port));
         }
-    }
-    else {
-        if(external_ip->second!=m_stream_server_info->external_ip||external_ip->second!=m_stream_server_info->external_port)
-        {
-            m_stream_server_info->external_ip=external_ip->second;
-            m_stream_server_info->external_port=external_port->second;
-            if(m_resetstreamserverCB)m_resetstreamserverCB(m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port));
+        else {
+            if(m_resetstreamserverCB)m_resetstreamserverCB(m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port),\
+            m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port));
         }
     }
 }
@@ -622,7 +622,7 @@ void p2p_punch_client::handle_reset_stream_state()
     m_stream_server_info->external_ip="";
     m_stream_server_info->external_port="";
     m_stream_server_info->stream_server_id="-1";
-    if(m_resetstreamserverCB)m_resetstreamserverCB("0.0.0.0",0);
+    if(m_resetstreamserverCB)m_resetstreamserverCB("0.0.0.0",0,"0.0.0.0",0);
 }
 void p2p_punch_client::handle_restart_device()
 {
