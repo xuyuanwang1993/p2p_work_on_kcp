@@ -65,6 +65,9 @@ p2p_punch_client::p2p_punch_client(std::string server_ip,std::string device_id,s
     m_wan_ip=FIRST_STRING;
     m_wan_port=FIRST_STRING;
     m_alive_timer_id=0;
+    m_stream_client_check_timer_id=0;
+    m_stream_server_check_timer_id=0;
+    m_stream_server_getip_timer_id=0;
     m_cache_timer_id=m_event_loop->addTimer([this](){this->remove_invalid_resources();return true;},CHECK_INTERVAL);//添加超时事件
 }
 
@@ -140,16 +143,16 @@ void p2p_punch_client::start_stream_check_task()
     if(m_stream_server_info->mode==STREAM_CLIENT)
     {
         send_get_stream_server_info();
-        m_event_loop->addTimer([this](){
+        m_stream_client_check_timer_id=m_event_loop->addTimer([this](){
         this->send_get_stream_server_info();
         return true;},ALIVE_TIME_INTERVAL*2);
     }
     else {
-        m_event_loop->addTimer([this](){
+        m_stream_server_getip_timer_id=m_event_loop->addTimer([this](){
             upnp::UpnpMapper::Instance().Api_addportMapper(upnp::SOCKET_TCP,xop::NetInterface::getLocalIPAddress(),std::stoi(this->m_stream_server_info->internal_port),\
                                                            std::stoi(m_stream_server_info->external_port),"stream_server");
             return false;},2000);
-        m_event_loop->addTimer([this](){
+        m_stream_server_check_timer_id=m_event_loop->addTimer([this](){
         auto func=[this](bool status){
             if(!status)
             {
@@ -210,6 +213,18 @@ p2p_punch_client::~p2p_punch_client()
     if(m_alive_timer_id>0)
     {
         m_event_loop->removeTimer(m_alive_timer_id);
+    }
+    if(m_stream_client_check_timer_id>0)
+    {
+        m_event_loop->removeTimer(m_stream_client_check_timer_id);
+    }
+    if(m_stream_server_check_timer_id>0)
+    {
+        m_event_loop->removeTimer(m_stream_server_check_timer_id);
+    }
+    if(m_stream_server_getip_timer_id>0)
+    {
+        m_event_loop->removeTimer(m_stream_server_getip_timer_id);
     }
     m_event_loop->removeChannel(m_client_channel);
 }

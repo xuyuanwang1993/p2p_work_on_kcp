@@ -104,6 +104,9 @@ private:
     std::string m_wan_port;
     xop::TimerId m_cache_timer_id;//
     xop::TimerId m_alive_timer_id;//
+    xop::TimerId m_stream_client_check_timer_id;
+    xop::TimerId m_stream_server_check_timer_id;
+    xop::TimerId m_stream_server_getip_timer_id;
     std::shared_ptr<xop::EventLoop> m_event_loop;
     std::atomic<bool> m_p2p_flag;//判断是否支持穿透
     std::map<int,m_p2p_session> m_session_map;
