@@ -741,6 +741,11 @@ void p2p_punch_server::handle_get_stream_server_info(int send_fd,struct sockaddr
         }
         if(in_use->second=="true")
         {
+            auto device_info=m_device_map.find(device_id->second);
+            if(device_info!=m_device_map.end())
+            {//防止重复获取
+                release_stream_server(device_id->second,std::stoi(device_info->second.stream_server_id));
+            }
             auto server_info=m_stream_server_map.find(account_name->second);
             if(server_info==m_stream_server_map.end()||server_info->second.find(std::stoi(stream_server_id->second))==server_info->second.end())
             {
@@ -942,25 +947,21 @@ void p2p_punch_server::handle_restart_stream_server(int send_fd,struct sockaddr_
     message_handle::packet_buf(response,"cmd","restart_stream_server");
     ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
     do{
-        std::cout<<"aaaaa"<<std::endl;
         auto stream_server_id=recv_map.find("stream_server_id");
         if(stream_server_id==recv_map.end())break;
         int s_stream_server_id=std::stoi(stream_server_id->second);
         std::cout<<s_stream_server_id<<"--------------"<<std::endl;
         if(s_stream_server_id<1)break;
-        std::cout<<"aabbba"<<std::endl;
         auto account=m_id_map.find(s_stream_server_id);
         if(account==m_id_map.end())break;
         std::string account_name=account->second;
         m_id_map.erase(s_stream_server_id);
         auto stream_server_map=m_stream_server_map.find(account_name);
-        std::cout<<"aabbdsadsaba"<<std::endl;
         if(stream_server_map==m_stream_server_map.end())break;
         auto stream_server_info=stream_server_map->second.find(s_stream_server_id);
         struct sockaddr_in addr = { 0 };
         socklen_t addrlen = sizeof(addr);
         addr.sin_family = AF_INET;
-        std::cout<<"aabbdasdsba"<<std::endl;
         for(auto i : stream_server_info->second.device_load_size_map)
         {//remove online device
             auto device_info=m_device_map.find(i.first);
