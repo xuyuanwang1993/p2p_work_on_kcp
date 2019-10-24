@@ -690,7 +690,10 @@ void p2p_punch_server::handle_keep_alive(int send_fd,struct sockaddr_in &addr,st
         if(m_stream_server_task_init)
         {
             auto stream_server_id=recv_map.find("stream_server_id");
-            if(stream_server_id!=std::end(recv_map))t_nat_info.stream_server_id=stream_server_id->second;
+            if(stream_server_id!=std::end(recv_map)&&stream_server_id->second!="-1")
+            {
+                send_reset_stream_state(send_fd,addr);
+            }
         }
     }
     message_handle::packet_buf(response,"cmd","keep_alive");
