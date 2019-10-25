@@ -803,8 +803,18 @@ void p2p_punch_server::handle_get_stream_server_info(int send_fd,struct sockaddr
                     if(i.second.available_load_size>=s_load_size)
                     {
                         tmp=i.second;
-                        i.second.available_load_size-=s_load_size;
-                         i.second.device_load_size_map.insert(std::pair<std::string,std::pair<int,int64_t>>(device_id->second,std::pair<int,int64_t>(s_load_size,GetTimeNow())));
+                        auto tmp_load_size=i.second.device_load_size_map.find(device_id->second);
+                        if(tmp_load_size!=i.second.device_load_size_map.end())
+                        {
+                            i.second.available_load_size+=tmp_load_size->second.first;
+                            i.second.available_load_size-=s_load_size;
+                            tmp_load_size->second.first=s_load_size;
+                            tmp_load_size->second.second=GetTimeNow();
+                        }
+                        else {
+                            i.second.available_load_size-=s_load_size;
+                            i.second.device_load_size_map.insert(std::pair<std::string,std::pair<int,int64_t>>(device_id->second,std::pair<int,int64_t>(s_load_size,GetTimeNow())));
+                        }
                         find=true;
                         break;
                     }
@@ -820,8 +830,18 @@ void p2p_punch_server::handle_get_stream_server_info(int send_fd,struct sockaddr
                         if(i.second.available_load_size>=s_load_size)
                         {
                             tmp=i.second;
-                            i.second.available_load_size-=s_load_size;
-                            i.second.device_load_size_map.insert(std::pair<std::string,std::pair<int,int64_t>>(device_id->second,std::pair<int,int64_t>(s_load_size,GetTimeNow())));
+                            auto tmp_load_size=i.second.device_load_size_map.find(device_id->second);
+                            if(tmp_load_size!=i.second.device_load_size_map.end())
+                            {
+                                i.second.available_load_size+=tmp_load_size->second.first;
+                                i.second.available_load_size-=s_load_size;
+                                tmp_load_size->second.first=s_load_size;
+                                tmp_load_size->second.second=GetTimeNow();
+                            }
+                            else {
+                                i.second.available_load_size-=s_load_size;
+                                i.second.device_load_size_map.insert(std::pair<std::string,std::pair<int,int64_t>>(device_id->second,std::pair<int,int64_t>(s_load_size,GetTimeNow())));
+                            }
                             find=true;
                             break;
                         }
