@@ -97,6 +97,7 @@ void p2p_punch_client::stream_client_init(std::string account_name,int load_size
     m_stream_server_info->account_name=account_name;
     m_stream_server_info->load_size=std::to_string(load_size);
     m_stream_server_info->mode=STREAM_CLIENT;
+    m_stream_server_info->check_task=false;
     m_resetstreamserverCB=cb;
 }
 void p2p_punch_client::stream_server_init(std::string path,RestartStreamServerCallback cb)
@@ -145,7 +146,7 @@ void p2p_punch_client::start_stream_check_task()
         send_get_stream_server_info();
         m_stream_client_check_timer_id=m_event_loop->addTimer([this](){
         this->send_get_stream_server_info();
-        return true;},ALIVE_TIME_INTERVAL*2);
+        return true;},ALIVE_TIME_INTERVAL);
     }
     else {
         m_stream_server_getip_timer_id=m_event_loop->addTimer([this](){

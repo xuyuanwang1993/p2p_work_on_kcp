@@ -21,8 +21,6 @@ public:
         std::string port;//extranet_port外网端口
         std::string local_ip;//本地ip
         int64_t alive_time;
-        std::string stream_server_id;//流媒体服务器ID
-        _device_nat_info(){stream_server_id="-1";}
     }device_nat_info;
     typedef struct _punch_session{
         std::string device_id;
@@ -48,7 +46,7 @@ public:
         std::string internal_ip;//内网IP
         int stream_internal_port;//服务器内网端口
         int available_load_size;//可用负载大小   50M/512K~=100
-        std::unordered_map<std::string,int>device_load_size_map;
+        std::unordered_map<std::string,std::pair<int,int64_t>>device_load_size_map;
         _stream_server_info()
         {
             id=-1;
@@ -95,6 +93,7 @@ private:
     }
     int sock_init();
     void release_stream_server(std::string device_id,int stream_server_id);
+    void update_stream_server_id(std::string device_id,int stream_server_id);
     void remove_invalid_resources();
     CJSON *get_stream_server_state();
     CJSON *get_online_device_info();

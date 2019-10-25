@@ -129,16 +129,6 @@ void p2p_punch_server::remove_invalid_resources()
     {
         if(time_now-i->second.alive_time>OFFLINE_TIME)
         {
-            if(m_stream_server_task_init)
-            {
-                struct sockaddr_in addr = { 0 };
-                socklen_t addrlen = sizeof(addr);
-                addr.sin_family = AF_INET;
-                addr.sin_port = htons(std::stoi(i->second.port));
-                addr.sin_addr.s_addr = inet_addr(i->second.ip.c_str());
-                send_reset_stream_state(m_server_sock[0],addr);
-                release_stream_server(i->second.device_id,std::stoi(i->second.stream_server_id));
-            }
             m_device_map.erase(i++);
         }
         else
@@ -173,7 +163,6 @@ void p2p_punch_server::remove_invalid_resources()
                     addr.sin_family = AF_INET;
                     addr.sin_port = htons(std::stoi(device_info->second.port));
                     addr.sin_addr.s_addr = inet_addr(device_info->second.ip.c_str());
-                    device_info->second.stream_server_id="-1";
                     send_reset_stream_state(m_server_sock[0],addr);
                 }
                 m_id_map.erase(j->second.id);
@@ -182,10 +171,9 @@ void p2p_punch_server::remove_invalid_resources()
             else {
                 for(auto k=std::begin(j->second.device_load_size_map);k!=std::end(j->second.device_load_size_map);)
                 {//移除无效设备
-                    auto device_info=m_device_map.find(k->first);
-                    if(device_info==std::end(m_device_map)||std::stoi(device_info->second.stream_server_id)!=j->second.id)
+                    if(time_now-k->second.second>OFFLINE_TIME)
                     {
-                        j->second.available_load_size+=k->second;
+                        j->second.available_load_size+=k->second.first;
                         j->second.device_load_size_map.erase(k++);
                     }
                     else {
@@ -239,7 +227,6 @@ CJSON *p2p_punch_server::get_online_device_info()
         CJSON_AddStringToObject(tmp,"port",i.second.port.c_str());
         CJSON_AddStringToObject(tmp,"local_ip",i.second.local_ip.c_str());
         CJSON_AddStringToObject(tmp,"alive_time",std::to_string(i.second.alive_time).c_str());
-        CJSON_AddStringToObject(tmp,"stream_server_id",i.second.stream_server_id.c_str());
     }
     return root;
 }
@@ -268,9 +255,23 @@ void p2p_punch_server::release_stream_server(std::string device_id,int stream_se
         if(stream_info==stream_info_map->second.end())break;
         auto load_size=stream_info->second.device_load_size_map.find(device_id);
         if(load_size==stream_info->second.device_load_size_map.end())break;
-        stream_info->second.available_load_size+=load_size->second;
+        stream_info->second.available_load_size+=load_size->second.first;
         stream_info->second.device_load_size_map.erase(load_size);
     }while(0);
+}
+void p2p_punch_server::update_stream_server_id(std::string device_id,int stream_server_id)
+{
+        do{
+        auto account=m_id_map.find(stream_server_id);
+        if(account==m_id_map.end())break;
+        auto stream_info_map=m_stream_server_map.find(account->second);
+        if(stream_info_map==m_stream_server_map.end())break;
+        auto stream_info=stream_info_map->second.find(stream_server_id);
+        if(stream_info==stream_info_map->second.end())break;
+        auto load_size=stream_info->second.device_load_size_map.find(device_id);
+        if(load_size==stream_info->second.device_load_size_map.end())break;
+        load_size->second.second=GetTimeNow();
+        }while(0);
 }
 void p2p_punch_server::handle_read()
 {
@@ -672,10 +673,9 @@ void p2p_punch_server::handle_keep_alive(int send_fd,struct sockaddr_in &addr,st
         if(m_stream_server_task_init)
         {
             auto stream_server_id=recv_map.find("stream_server_id");
-            if(stream_server_id!=std::end(recv_map)&&t_nat_info.stream_server_id!=stream_server_id->second)
+            if(stream_server_id!=std::end(recv_map))
             {
-                release_stream_server(device_id->second,std::stoi(t_nat_info.stream_server_id));
-                t_nat_info.stream_server_id=stream_server_id->second;
+                update_stream_server_id(device_id->second,std::stoi(stream_server_id->second));
             }
         }
         m_device_map.insert(std::make_pair(device_id->second,t_nat_info));
@@ -690,9 +690,9 @@ void p2p_punch_server::handle_keep_alive(int send_fd,struct sockaddr_in &addr,st
         if(m_stream_server_task_init)
         {
             auto stream_server_id=recv_map.find("stream_server_id");
-            if(stream_server_id!=std::end(recv_map)&&stream_server_id->second!="-1")
+            if(stream_server_id!=std::end(recv_map))
             {
-                send_reset_stream_state(send_fd,addr);
+                update_stream_server_id(device_id->second,std::stoi(stream_server_id->second));
             }
         }
     }
@@ -744,11 +744,6 @@ void p2p_punch_server::handle_get_stream_server_info(int send_fd,struct sockaddr
         }
         if(in_use->second=="true")
         {
-            auto device_info=m_device_map.find(device_id->second);
-            if(device_info!=m_device_map.end())
-            {//防止重复获取
-                release_stream_server(device_id->second,std::stoi(device_info->second.stream_server_id));
-            }
             auto server_info=m_stream_server_map.find(account_name->second);
             if(server_info==m_stream_server_map.end()||server_info->second.find(std::stoi(stream_server_id->second))==server_info->second.end())
             {
@@ -766,6 +761,20 @@ void p2p_punch_server::handle_get_stream_server_info(int send_fd,struct sockaddr
                 send_reset_stream_state(send_fd,addr);
                 break;
             }
+            auto s_load_size=s_server_info->second.device_load_size_map.find(device_id->second);
+            if(s_load_size==s_server_info->second.device_load_size_map.end())
+            {
+                int i_load_size=std::stoi(load_size->second);
+                if(s_server_info->second.available_load_size>=i_load_size)
+                {
+                    s_server_info->second.available_load_size-=i_load_size;
+                    s_server_info->second.device_load_size_map.insert(std::pair<std::string,std::pair<int,int64_t>>(device_id->second,std::pair<int,int64_t>(i_load_size,GetTimeNow())));
+                }
+                else {
+                    send_reset_stream_state(send_fd,addr);
+                    break;
+                }
+            }
             message_handle::packet_buf(response,"cmd","get_stream_server_info");
             message_handle::packet_buf(response,"stream_server_id",std::to_string(s_server_info->second.id));
             message_handle::packet_buf(response,"external_ip",s_server_info->second.external_ip);
@@ -782,7 +791,6 @@ void p2p_punch_server::handle_get_stream_server_info(int send_fd,struct sockaddr
             ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
         }
         else {
-            release_stream_server(device_id->second,std::stoi(stream_server_id->second));
             auto server_info=m_stream_server_map.find(account_name->second);
             int s_load_size=std::stoi(load_size->second);
             if(s_load_size<=0)break;
@@ -796,7 +804,7 @@ void p2p_punch_server::handle_get_stream_server_info(int send_fd,struct sockaddr
                     {
                         tmp=i.second;
                         i.second.available_load_size-=s_load_size;
-                        i.second.device_load_size_map.insert(std::pair<std::string,int>(device_id->second,s_load_size));
+                         i.second.device_load_size_map.insert(std::pair<std::string,std::pair<int,int64_t>>(device_id->second,std::pair<int,int64_t>(s_load_size,GetTimeNow())));
                         find=true;
                         break;
                     }
@@ -813,7 +821,7 @@ void p2p_punch_server::handle_get_stream_server_info(int send_fd,struct sockaddr
                         {
                             tmp=i.second;
                             i.second.available_load_size-=s_load_size;
-                            i.second.device_load_size_map.insert(std::pair<std::string,int>(device_id->second,s_load_size));
+                            i.second.device_load_size_map.insert(std::pair<std::string,std::pair<int,int64_t>>(device_id->second,std::pair<int,int64_t>(s_load_size,GetTimeNow())));
                             find=true;
                             break;
                         }
@@ -971,10 +979,8 @@ void p2p_punch_server::handle_restart_stream_server(int send_fd,struct sockaddr_
             if(device_info==std::end(m_device_map))continue;
             addr.sin_port = htons(std::stoi(device_info->second.port));
             addr.sin_addr.s_addr = inet_addr(device_info->second.ip.c_str());
-            device_info->second.stream_server_id="-1";
             send_reset_stream_state(m_server_sock[0],addr);
         }
-        std::cout<<"aabbbfdsfda"<<std::endl;
         addr.sin_port = htons(stream_server_info->second.external_port);
         addr.sin_addr.s_addr = inet_addr(stream_server_info->second.external_ip.c_str());
         stream_server_map->second.erase(stream_server_info);
@@ -990,7 +996,6 @@ void p2p_punch_server::handle_restart_device(int send_fd,struct sockaddr_in&addr
     if(device_id==std::end(recv_map))return;
     auto device_info=m_device_map.find(device_id->second);
     if(device_info==m_device_map.end())return;
-    if(m_stream_server_task_init)release_stream_server(device_id->second,std::stoi(device_info->second.stream_server_id));
     addr.sin_port = htons(std::stoi(device_info->second.port));
     addr.sin_addr.s_addr = inet_addr(device_info->second.ip.c_str());
     ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
