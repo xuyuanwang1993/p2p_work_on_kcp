@@ -67,7 +67,7 @@ p2p_punch_client::p2p_punch_client(std::string server_ip,std::string device_id,s
     m_alive_timer_id=0;
     m_stream_client_check_timer_id=0;
     m_stream_server_check_timer_id=0;
-    m_stream_server_getip_timer_id=0;
+    m_stream_server_addportmapper_timer_id=0;
     m_cache_timer_id=m_event_loop->addTimer([this](){this->remove_invalid_resources();return true;},CHECK_INTERVAL);//添加超时事件
 }
 
@@ -124,13 +124,17 @@ void p2p_punch_client::stream_server_init(std::string path,RestartStreamServerCa
         auto external_port=message_map.find("external_port");
         auto account_name=message_map.find("account_name");
         auto igd_ip=message_map.find("igd_ip");
-
+        auto server_path=message_map.find("server_path");
+        auto server_name=message_map.find("server_name");
         if(load_size==message_map.end()||internal_port==message_map.end()||external_port==message_map.end()\
-                ||account_name==message_map.end()||igd_ip==message_map.end())break;
+                ||account_name==message_map.end()||igd_ip==message_map.end()||server_path==message_map.end()\
+                ||server_name==message_map.end())break;
         m_stream_server_info->load_size=load_size->second;
         m_stream_server_info->internal_port=internal_port->second;
         m_stream_server_info->external_port=external_port->second;
         m_stream_server_info->account_name=account_name->second;
+        m_stream_server_info->server_path=server_path->second;
+        m_stream_server_info->server_name=server_name->second;
         std::string s_igd_ip=igd_ip->second;
         upnp::UpnpMapper::Instance().Init(m_event_loop.get(),s_igd_ip);
         std::cout<<"stream_server init success!"<<std::endl;
@@ -149,9 +153,17 @@ void p2p_punch_client::start_stream_check_task()
         return true;},ALIVE_TIME_INTERVAL);
     }
     else {
-        m_stream_server_getip_timer_id=m_event_loop->addTimer([this](){
+        m_stream_server_addportmapper_timer_id=m_event_loop->addTimer([this](){
+            if(upnp::UpnpMapper::Instance().APi_getexternalIP()!=std::string())
+            {
+                server_restart();
+            }
+            else {
+                upnp::UpnpMapper::Instance().Api_GetNewexternalIP([this](bool status){if(status)this->server_restart();});
+            }
             upnp::UpnpMapper::Instance().Api_addportMapper(upnp::SOCKET_TCP,xop::NetInterface::getLocalIPAddress(),std::stoi(this->m_stream_server_info->internal_port),\
                                                            std::stoi(m_stream_server_info->external_port),"stream_server");
+                                                           this->m_stream_server_addportmapper_timer_id=0;
             return false;},2000);
         m_stream_server_check_timer_id=m_event_loop->addTimer([this](){
         auto func=[this](bool status){
@@ -163,9 +175,10 @@ void p2p_punch_client::start_stream_check_task()
         };
         if( upnp::UpnpMapper::Instance().Api_discoverOk())
         {
+            upnp::UpnpMapper::Instance().Api_GetNewexternalIP([this](bool status){if(status)this->server_restart();});
             upnp::UpnpMapper::Instance().Api_GetSpecificPortMappingEntry(upnp::SOCKET_TCP,std::stoi(m_stream_server_info->external_port),func);
         }
-        return true;},ALIVE_TIME_INTERVAL*10);
+        return true;},ALIVE_TIME_INTERVAL*4);
     }
 }
 void p2p_punch_client::start()
@@ -191,6 +204,27 @@ bool p2p_punch_client::try_establish_connection(std::string remote_device_id,int
     }
     send_set_up_connection_packet(remote_device_id,channel_id,src_name);
     return true;
+}
+bool p2p_punch_client::add_external_ip_to_dev(std::string ip)
+{
+    static std::string save_ip="0.0.0.0";
+    bool ret=false;
+    static const std::string dev_name=xop::NetInterface::getLocalIDevname();
+    if(ip!=save_ip)
+    {
+        ret=true;
+        if(save_ip!="0.0.0.0")
+        {
+            std::string delete_command=" ip addr delete ";
+            delete_command=delete_command+save_ip+"/32 dev "+dev_name;
+            system(delete_command.c_str());
+        }
+        save_ip=ip;
+        std::string add_command=" ip addr add ";
+        add_command=add_command+save_ip+"/32 dev "+dev_name;
+        system(add_command.c_str());
+    }
+    return ret;
 }
 bool p2p_punch_client::try_establish_active_connection(std::string remote_device_id,int port,int channel_id,std::string src_name,int mode)
 {
@@ -223,9 +257,9 @@ p2p_punch_client::~p2p_punch_client()
     {
         m_event_loop->removeTimer(m_stream_server_check_timer_id);
     }
-    if(m_stream_server_getip_timer_id>0)
+    if(m_stream_server_addportmapper_timer_id>0)
     {
-        m_event_loop->removeTimer(m_stream_server_getip_timer_id);
+        m_event_loop->removeTimer(m_stream_server_addportmapper_timer_id);
     }
     m_event_loop->removeChannel(m_client_channel);
 }
@@ -724,7 +758,17 @@ void p2p_punch_client::tcp_active_connect_task(std::string session_id,std::strin
     });
     t.detach();
 }
-
+void p2p_punch_client::server_restart( )
+{
+    if(add_external_ip_to_dev(upnp::UpnpMapper::Instance().APi_getexternalIP()))
+    {
+        std::string kill_command="killall -9 ";
+        kill_command+=m_stream_server_info->server_name;
+        system(kill_command.c_str());
+        std::string run_command=m_stream_server_info->server_path+m_stream_server_info->server_name;
+        system(run_command.c_str());
+    }
+}
 void p2p_punch_client::handle_keep_alive(std::map<std::string,std::string> &recv_map)//心跳保活
 {
     std::cout<<"recv alive_time ack!"<<std::endl;

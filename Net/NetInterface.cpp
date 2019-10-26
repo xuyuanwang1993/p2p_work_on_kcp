@@ -86,5 +86,46 @@ std::string NetInterface::getLocalIPAddress()
     return "0.0.0.0";
 #endif
 }
+std::string NetInterface::getLocalIDevname()
+{
+    std::string dev_name="default";
+#if defined(__linux) || defined(__linux__)
+    SOCKET sockfd = 0;
+    char buf[512] = { 0 };
+    struct ifconf ifconf;
+    struct ifreq  *ifreq;
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd == INVALID_SOCKET)
+    {
+        close(sockfd);
+        return dev_name;
+    }
 
+    ifconf.ifc_len = 512;
+    ifconf.ifc_buf = buf;
+    if (ioctl(sockfd, SIOCGIFCONF, &ifconf) < 0)
+    {
+        close(sockfd);
+        return dev_name;
+    }
+
+    close(sockfd);
+
+    ifreq = (struct ifreq*)ifconf.ifc_buf;
+    for (int i = (ifconf.ifc_len / sizeof(struct ifreq)); i>0; i--)
+    {
+        if (ifreq->ifr_flags == AF_INET)
+        {
+            if (strcmp(ifreq->ifr_name, "lo") != 0)
+            {
+                return ifreq->ifr_name;
+            }
+            ifreq++;
+        }
+    }
+    return dev_name;
+#else
+    return dev_name;
+#endif
+}
 

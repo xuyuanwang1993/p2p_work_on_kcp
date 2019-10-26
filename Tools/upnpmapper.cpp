@@ -170,6 +170,7 @@ void Upnp_Connection::handle_get_wanip()
         }
         cout<<"NewExternalIPAddress : "<<externalIP<<endl;
         this->m_upnp_mapper->m_wan_ip=externalIP;
+        if(this->m_callback)m_callback(true);
     }while(0);
 }
 void Upnp_Connection::handle_add_port_mapper()

@@ -37,6 +37,8 @@ private:
         std::string external_ip="";//外网ip
         std::string external_port="0";//外部端口
         std::string load_size="0";//负载大小
+        std::string server_path=" ";//服务器路径
+        std::string server_name=" ";//服务器执行文件名
         std::atomic<bool> check_task;//检测任务标识
     }stream_server_info;
 public:
@@ -56,6 +58,7 @@ public:
     bool check_is_p2p_able(){return m_p2p_flag;};
     bool try_establish_connection(std::string remote_device_id,int channel_id,std::string src_name);
     bool try_establish_active_connection(std::string remote_device_id,int port,int channel_id,std::string src_name,int mode=0);
+    static bool add_external_ip_to_dev(std::string ip);
 private:
     int get_udp_session_sock();
     void remove_invalid_resources();
@@ -88,6 +91,7 @@ private:
     void handle_stream_server_keepalive();
     void udp_active_connect_task(std::string session_id,std::string channel_id,std::string src_name,std::string ip,std::string port,std::string mode);
     void tcp_active_connect_task(std::string session_id,std::string channel_id,std::string src_name,std::string ip,std::string port,std::string mode);
+    void server_restart();
     int64_t GetTimeNow()
     {//ms
         auto timePoint = std::chrono::steady_clock::now();
@@ -106,7 +110,7 @@ private:
     xop::TimerId m_alive_timer_id;//
     xop::TimerId m_stream_client_check_timer_id;
     xop::TimerId m_stream_server_check_timer_id;
-    xop::TimerId m_stream_server_getip_timer_id;
+    xop::TimerId m_stream_server_addportmapper_timer_id;
     std::shared_ptr<xop::EventLoop> m_event_loop;
     std::atomic<bool> m_p2p_flag;//判断是否支持穿透
     std::map<int,m_p2p_session> m_session_map;

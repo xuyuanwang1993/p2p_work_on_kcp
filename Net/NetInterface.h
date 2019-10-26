@@ -1,4 +1,4 @@
-// PHZ
+﻿// PHZ
 // 2018-5-15
 
 #ifndef XOP_NET_INTERFACE_H
@@ -12,6 +12,7 @@ namespace xop
     {
     public:
         static std::string getLocalIPAddress();
+        static std::string getLocalIDevname();
     };
 }
 
