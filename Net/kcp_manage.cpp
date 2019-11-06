@@ -1,4 +1,4 @@
-#include "kcp_manage.h"
+﻿#include "kcp_manage.h"
 #include <mutex>
 #include <string>
 #include <stdint.h>
@@ -250,11 +250,13 @@ void KCP_Manager::StartUpdateLoop()
 void KCP_Manager::CloseConnection(int conv_id)
 {//移除连接
     if(!m_init)return ;
-    std::lock_guard<std::mutex> locker(m_mutex);
-    if(m_kcp_map.find(conv_id)!=std::end(m_kcp_map))
-    {
-        m_kcp_map.erase(conv_id);
-    }
+    this->m_event_loop->addTriggerEvent([this,conv_id](){
+        std::lock_guard<std::mutex> locker(m_mutex);
+        if(m_kcp_map.find(conv_id)!=std::end(m_kcp_map))
+        {
+            m_kcp_map.erase(conv_id);
+        }
+    });
 }
 bool KCP_Manager::UpdateLoop()
 {
