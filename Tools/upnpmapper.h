@@ -48,7 +48,7 @@ private:
     void HandleData();
     bool check_packet();
     void send_get_wanip();
-    void send_add_port_mapper(SOCKET_TYPE type,string internal_ip,int internal_port,int external_port,string description);
+    void send_add_port_mapper(SOCKET_TYPE type,string internal_ip,int internal_port,int external_port,string description,int alive_time);
     void send_get_specific_port_mapping_entry(SOCKET_TYPE type,int external_port);
     void send_delete_port_mapper(SOCKET_TYPE type,int external_port);
     void send_get_control_url();
@@ -64,7 +64,7 @@ class UpnpMapper{
 public:
     static UpnpMapper &Instance(){static UpnpMapper instance;return instance; }
     void Init(xop::EventLoop *event_loop,string lgd_ip);
-    void Api_addportMapper(SOCKET_TYPE type,string internal_ip,int internal_port,int external_port,string description,UPNPCALLBACK callback=nullptr);
+    void Api_addportMapper(SOCKET_TYPE type,string internal_ip,int internal_port,int external_port,string description,int alive_time=20,UPNPCALLBACK callback=nullptr);
     void Api_GetSpecificPortMappingEntry(SOCKET_TYPE type,int external_port,UPNPCALLBACK callback=nullptr);
     void Api_deleteportMapper(SOCKET_TYPE type,int external_port,UPNPCALLBACK callback=nullptr);
     void Api_GetNewexternalIP(UPNPCALLBACK callback=nullptr);
@@ -79,7 +79,7 @@ private:
     void send_discover_packet();
     void get_control_url();
     void get_wanip(UPNPCALLBACK callback=nullptr);
-    void add_port_mapper(SOCKET_TYPE type,string internal_ip,int internal_port,int external_port,string description,UPNPCALLBACK callback=nullptr);
+    void add_port_mapper(SOCKET_TYPE type,string internal_ip,int internal_port,int external_port,string description,int alive_time=20,UPNPCALLBACK callback=nullptr);
     void get_specific_port_mapping_entry(SOCKET_TYPE type,int external_port,UPNPCALLBACK callback=nullptr);
     void delete_port_mapper(SOCKET_TYPE type,int external_port,UPNPCALLBACK callback=nullptr);
     std::shared_ptr<xop::Channel>m_udp_channel;

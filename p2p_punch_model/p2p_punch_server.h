@@ -12,7 +12,7 @@
 class p2p_punch_server{
     const unsigned short UDP_RECV_PORT=23333;
     const int OFFLINE_TIME=65000;//65s
-    const int CHECK_INTERVAL=5000;//5s
+    const unsigned int CHECK_INTERVAL=5000;//5s
     const int SESSION_CACHE_TIME=10000;//10s
 public:
     typedef struct _device_nat_info{
@@ -34,7 +34,7 @@ public:
     }punch_session;
 
     typedef struct _session_info{
-        int session_id;//会话id
+        unsigned int session_id;//会话id
         punch_session session[2];
     }session_info;
     typedef struct  _stream_server_info{
@@ -84,6 +84,7 @@ private:
     void handle_get_stream_server_state(int send_fd,struct sockaddr_in&addr);//流媒体服务器状态查询（调试模式下有效)
     void handle_restart_stream_server(int send_fd,struct sockaddr_in&addr,std::map<std::string,std::string> &recv_map);//指定流媒体服务器重启（调试模式下有效,不清除连接信息）
     void handle_restart_device(int send_fd,struct sockaddr_in&addr,std::map<std::string,std::string> &recv_map);//重启指定推流端（调试模式下有效）
+    void handle_setup_data_tunnel(int send_fd,struct sockaddr_in&addr,std::map<std::string,std::string> &recv_map);//建立转发隧道，不使用当前服务器流量
     void handle_not_supported_command(int send_fd,std::string cmd,struct sockaddr_in &addr);
     std::string packet_error_response(std::string cmd,std::string error_info);
     int64_t GetTimeNow()
@@ -100,7 +101,7 @@ private:
     p2p_punch_server();
     std::atomic<bool> m_stream_server_task_init;
     bool m_open_debug=false;
-    int m_session_id;
+    unsigned int m_session_id;
     int m_stream_server_id;
     int m_server_sock[2];//
      static std::unordered_map<std::string,int> m_command_map;

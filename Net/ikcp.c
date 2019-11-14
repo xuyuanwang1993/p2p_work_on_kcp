@@ -1,4 +1,4 @@
-//=====================================================================
+﻿//=====================================================================
 //
 // KCP - A Better ARQ Protocol Implementation
 // skywind3000 (at) gmail.com, 2010-2011
@@ -43,8 +43,8 @@ const IUINT32 IKCP_THRESH_INIT = 2;
 const IUINT32 IKCP_THRESH_MIN = 2;
 const IUINT32 IKCP_PROBE_INIT = 7000;		// 7 secs to probe window size
 const IUINT32 IKCP_PROBE_LIMIT = 120000;	// up to 120 secs to probe window
-
-
+const IUINT32 IKCP_MIN_INTERVAL=0;//default 10
+const IUINT32 IKCP_MAX_INTERVAL=5000;//default 5000
 //---------------------------------------------------------------------
 // encode / decode
 //---------------------------------------------------------------------
@@ -1212,8 +1212,8 @@ int ikcp_setmtu(ikcpcb *kcp, int mtu)
 
 int ikcp_interval(ikcpcb *kcp, int interval)
 {
-	if (interval > 5000) interval = 5000;
-	else if (interval < 10) interval = 10;
+    if (interval > IKCP_MAX_INTERVAL) interval = IKCP_MAX_INTERVAL;
+    else if (interval < IKCP_MIN_INTERVAL) interval = IKCP_MIN_INTERVAL;
 	kcp->interval = interval;
 	return 0;
 }
@@ -1230,8 +1230,8 @@ int ikcp_nodelay(ikcpcb *kcp, int nodelay, int interval, int resend, int nc)
 		}
 	}
 	if (interval >= 0) {
-		if (interval > 5000) interval = 5000;
-		else if (interval < 10) interval = 10;
+        if (interval > IKCP_MAX_INTERVAL) interval = IKCP_MAX_INTERVAL;
+        else if (interval < IKCP_MIN_INTERVAL) interval = IKCP_MIN_INTERVAL;
 		kcp->interval = interval;
 	}
 	if (resend >= 0) {

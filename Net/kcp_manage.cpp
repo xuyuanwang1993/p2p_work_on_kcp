@@ -8,7 +8,7 @@
 using namespace sensor_net;
 static  int kcp_output(const char *buf, int len, struct IKCPCB *kcp, void *user)
 {
-    (void *)(kcp);
+    (void )(kcp);
     KCP_Interface *interface=(KCP_Interface *)user;
     return interface->Send(buf,len);
 }
@@ -146,6 +146,7 @@ void KCP_Interface::SetTransferMode(KCP_TRANSFER_MODE mode,int nodelay, int inte
         break;
     default:
         std::cerr<<"This transmode isn't been supported!"<<std::endl;
+        break;
     }
 }
 
@@ -169,7 +170,26 @@ void KCP_Interface::Send_Userdata(std::shared_ptr<char>buf,int len)
         }
     });
 }
-
+void KCP_Interface::Send_Userdata(const char *buf,int len)
+{
+       m_taskScheduler->addTriggerEvent([this,buf,len](){
+        if(this->CheckTransWindow())
+        {
+            ikcp_send(this->m_kcp,buf,len);
+        }
+        else
+        {
+            if(m_lost_connectionCB)
+            {
+                int64_t time_now=KCP_Manager::GetTimeNow();
+                if(time_now-m_last_alive_time>MAX_TIMEOUT_TIME)
+                {//判断对端是否断开
+                    m_lost_connectionCB(m_data);
+                }
+            }
+        }
+    });
+}
 int KCP_Interface::Send(const char *buf,int len)
 {
     if(m_have_cleared)return -1;
@@ -243,11 +263,11 @@ std::shared_ptr<KCP_Interface> KCP_Manager::AddConnection(std::shared_ptr<xop::C
     return interface;
 }
 
-void KCP_Manager::StartUpdateLoop()
+void KCP_Manager::StartUpdateLoop(unsigned int interval)
 {
-    m_event_loop->getTaskScheduler()->addTimer(std::bind(&sensor_net::KCP_Manager::UpdateLoop,this),10);
+    m_event_loop->getTaskScheduler()->addTimer(std::bind(&sensor_net::KCP_Manager::UpdateLoop,this),interval);
 }
-void KCP_Manager::CloseConnection(int conv_id)
+void KCP_Manager::CloseConnection(unsigned int conv_id)
 {//移除连接
     if(!m_init)return ;
     this->m_event_loop->addTriggerEvent([this,conv_id](){
@@ -260,7 +280,7 @@ void KCP_Manager::CloseConnection(int conv_id)
 }
 bool KCP_Manager::UpdateLoop()
 {
-    std::unordered_map<int,std::shared_ptr<KCP_Interface>> tmp_map;
+    std::unordered_map<unsigned int,std::shared_ptr<KCP_Interface>> tmp_map;
     {
         std::lock_guard<std::mutex> locker(m_mutex);
         tmp_map=m_kcp_map;

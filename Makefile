@@ -74,7 +74,7 @@ $(OBJS_PATH)/%.o : ./%.c
 	@$(CXX) -c  $< -o  $@  $(CXX_FLAGS) $(INC)
 
 install :
-	@echo -e "\033[31mERROR:install is't supported yet!\033[0m"
+	@echo  "\033[31mERROR:install is't supported yet!\033[0m"
 
 clean :
 	-rm -rf $(OUT_DIR)

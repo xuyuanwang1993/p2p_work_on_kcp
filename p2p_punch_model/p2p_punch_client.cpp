@@ -18,6 +18,8 @@ typedef enum{
     CLIENT_STREAM_SERVER_REGISTER,
     CLIENT_RESTART_STREAM_SERVER,
     CLIENT_STREAM_SERVER_KEEPALIVE,
+    CLIENT_SETUP_DATA_TUNNEL,
+    CLIENT_SERVER_SETUP_DATA_TUNNEL,
     CLIENT_END,
 }CLIENT_COMMAND;
 static const char COMMAND_LIST[][64]={
@@ -34,6 +36,8 @@ static const char COMMAND_LIST[][64]={
     "stream_server_register",
     "restart_stream_server",
     "stream_server_keepalive",
+    "setup_data_tunnel",
+    "server_setup_data_tunnel",
     "end",
 };
 std::unordered_map<std::string,int> p2p_punch_client::m_command_map;
@@ -149,10 +153,13 @@ void p2p_punch_client::start_stream_check_task()
     {
         send_get_stream_server_info();
         m_stream_client_check_timer_id=m_event_loop->addTimer([this](){
-        this->send_get_stream_server_info();
-        return true;},ALIVE_TIME_INTERVAL);
+            this->send_get_stream_server_info();
+            return true;},ALIVE_TIME_INTERVAL);
     }
     else {
+        //for data_tunnel
+        m_stream_server_info->data_tunnel.reset(new xop::udp_data_tunnel(m_event_loop.get(),std::stoi(m_stream_server_info->internal_port)));
+        //第一次进入延迟两秒判断外网ip是否获取到，获取到时重启流媒体服务，并进行端口映射
         m_stream_server_addportmapper_timer_id=m_event_loop->addTimer([this](){
             if(upnp::UpnpMapper::Instance().APi_getexternalIP()!=std::string())
             {
@@ -163,22 +170,33 @@ void p2p_punch_client::start_stream_check_task()
             }
             upnp::UpnpMapper::Instance().Api_addportMapper(upnp::SOCKET_TCP,xop::NetInterface::getLocalIPAddress(),std::stoi(this->m_stream_server_info->internal_port),\
                                                            std::stoi(m_stream_server_info->external_port),"stream_server");
-                                                           this->m_stream_server_addportmapper_timer_id=0;
+            upnp::UpnpMapper::Instance().Api_addportMapper(upnp::SOCKET_UDP,xop::NetInterface::getLocalIPAddress(),std::stoi(this->m_stream_server_info->internal_port),\
+                                                           std::stoi(m_stream_server_info->external_port),"stream_server",0);
+            this->m_stream_server_addportmapper_timer_id=0;
             return false;},2000);
+        //添加定时器判断端口映射是否成功，如果不成功则重新映射
         m_stream_server_check_timer_id=m_event_loop->addTimer([this](){
-        auto func=[this](bool status){
-            if(!status)
+            auto func=[this](bool status){
+                if(!status)
+                {
+                    upnp::UpnpMapper::Instance().Api_addportMapper(upnp::SOCKET_TCP,xop::NetInterface::getLocalIPAddress(),std::stoi(this->m_stream_server_info->internal_port),\
+                                                                   std::stoi(m_stream_server_info->external_port),"stream_server");
+                }
+            };
+            auto udp_func=[this](bool status){
+                if(!status)
+                {
+                    upnp::UpnpMapper::Instance().Api_addportMapper(upnp::SOCKET_UDP,xop::NetInterface::getLocalIPAddress(),std::stoi(this->m_stream_server_info->internal_port),\
+                                                                   std::stoi(m_stream_server_info->external_port),"stream_server",0);
+                }
+            };
+            if( upnp::UpnpMapper::Instance().Api_discoverOk())
             {
-                upnp::UpnpMapper::Instance().Api_addportMapper(upnp::SOCKET_TCP,xop::NetInterface::getLocalIPAddress(),std::stoi(this->m_stream_server_info->internal_port),\
-                                                               std::stoi(m_stream_server_info->external_port),"stream_server");
+                upnp::UpnpMapper::Instance().Api_GetNewexternalIP([this](bool status){if(status)this->server_restart();});
+                upnp::UpnpMapper::Instance().Api_GetSpecificPortMappingEntry(upnp::SOCKET_TCP,std::stoi(m_stream_server_info->external_port),func);
+                upnp::UpnpMapper::Instance().Api_GetSpecificPortMappingEntry(upnp::SOCKET_UDP,std::stoi(m_stream_server_info->external_port),udp_func);
             }
-        };
-        if( upnp::UpnpMapper::Instance().Api_discoverOk())
-        {
-            upnp::UpnpMapper::Instance().Api_GetNewexternalIP([this](bool status){if(status)this->server_restart();});
-            upnp::UpnpMapper::Instance().Api_GetSpecificPortMappingEntry(upnp::SOCKET_TCP,std::stoi(m_stream_server_info->external_port),func);
-        }
-        return true;},ALIVE_TIME_INTERVAL*4);
+            return true;},ALIVE_TIME_INTERVAL*4);
     }
 }
 void p2p_punch_client::start()
@@ -187,6 +205,7 @@ void p2p_punch_client::start()
     {
         if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
         {
+            m_stream_server_info->data_tunnel->run();
             send_stream_server_register();
             this->m_event_loop->addTimer([this](){this->send_stream_server_keepalive();return true;},ALIVE_TIME_INTERVAL);
             m_p2p_flag=true;
@@ -231,7 +250,24 @@ bool p2p_punch_client::try_establish_active_connection(std::string remote_device
     send_active_connection(remote_device_id,channel_id,src_name,port,mode);
     return true;
 }
-
+bool p2p_punch_client::try_set_up_data_tunnel(std::string remote_device_id,std::string source_name,TUNNEL_TYPE type,int port)
+{
+    if(type==KCP_TUNNEL)
+    {
+        return     try_establish_connection(remote_device_id,TUNNEL_CHANNEL_ID,source_name);
+    }
+    else if(type ==KCP_ACTIVE_TUNNEL)
+    {
+        return try_establish_active_connection(remote_device_id,port,TUNNEL_CHANNEL_ID,source_name);
+    }
+    else if (type==KCP_RELAY_TUNNEL) {
+        send_setup_data_tunnel(source_name,remote_device_id);
+        return true;
+    }
+    else {
+        return true;
+    }
+}
 p2p_punch_client::~p2p_punch_client()
 {
     if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
@@ -299,11 +335,11 @@ void p2p_punch_client::handle_read()
     int ret=::recvfrom(m_client_sock,buf,32768,0,(struct sockaddr*)&addr,&len);
     if(ret>0)
     {
-        LOG_INFO("%s",buf);
         std::map<std::string,std::string> recv_map=message_handle::parse_buf(buf);
         auto cmd=recv_map.find("cmd");
         if(cmd!=std::end(recv_map))
         {
+            LOG_INFO("%s",buf);
             auto command_name=m_command_map.find(cmd->second);
             if(command_name==std::end(m_command_map))
             {
@@ -338,6 +374,7 @@ void p2p_punch_client::handle_read()
                 case CLIENT_RESTART_DEVICE:
                     if(!m_stream_server_info||m_stream_server_info->mode!=STREAM_SERVER)
                         handle_restart_device();
+                    break;
                 case CLIENT_GET_EXTERNAL_IP:
                     handle_get_external_ip(recv_map);
                     break;
@@ -352,6 +389,13 @@ void p2p_punch_client::handle_read()
                 case CLIENT_STREAM_SERVER_KEEPALIVE:
                     if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
                         handle_stream_server_keepalive();
+                    break;
+                case CLIENT_SETUP_DATA_TUNNEL:
+                    handle_setup_data_tunnel(recv_map);
+                    break;
+                case CLIENT_SERVER_SETUP_DATA_TUNNEL:
+                    if(m_stream_server_info&&m_stream_server_info->mode==STREAM_SERVER)
+                        handle_server_setup_data_tunnel(recv_map);
                     break;
                 default:
                     LOG_INFO("unknown command!");
@@ -369,14 +413,17 @@ void p2p_punch_client::session_handle_read(int fd)
     int ret=::recvfrom(fd,buf,32768,0,(struct sockaddr*)&addr,&len);
     if(ret>0)
     {
-        LOG_INFO("%s",buf);
         std::map<std::string,std::string> recv_map=message_handle::parse_buf(buf);
         auto cmd=recv_map.find("cmd");
         if(cmd!=std::end(recv_map))
         {
+            LOG_INFO("%s",buf);
             if(cmd->second=="punch_hole")
             {
                 handle_punch_hole(recv_map);
+            }
+            else if (cmd->second=="start_tunnel_transfer") {
+                handle_start_tunnel_transfer(recv_map);
             }
             else
             {
@@ -445,9 +492,21 @@ void p2p_punch_client::send_low_ttl_packet(m_p2p_session &session,std::string ip
     ::sendto(session.channelPtr->fd(),punch.c_str(),punch.length(),0,(sockaddr *)&addr,sizeof addr);
     setsockopt(session.channelPtr->fd(), IPPROTO_IP, IP_TTL, (char *)&curTTL, lenTTL);
 }
+void p2p_punch_client::send_start_tunnel_transfer_packet(m_p2p_session &session,std::string ip,uint16_t port)
+{
+    //指定只接受来自服务器的包
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr(ip.c_str());
+    addr.sin_port = htons(port);
+    ::connect(session.channelPtr->fd(),(sockaddr *)&addr,sizeof addr);
+    std::string request;
+    message_handle::packet_buf(request,"cmd","start_tunnel_transfer");
+    message_handle::packet_buf(request,"session_id",std::to_string(session.session_id));
+    ::sendto(session.channelPtr->fd(),request.c_str(),request.length(),0,(sockaddr *)&addr,sizeof addr);
+}
 void p2p_punch_client::send_punch_hole_response_packet(m_p2p_session &session)
 {
-    std::cout<<"send_punch_hole_response_packet"<<std::endl;
     std::string request;
     message_handle::packet_buf(request,"cmd","punch_hole_response");
     message_handle::packet_buf(request,"device_id",m_device_id);
@@ -553,6 +612,19 @@ void p2p_punch_client::send_stream_server_keepalive()
         ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
     }
 }
+void p2p_punch_client::send_setup_data_tunnel(std::string source_name,std::string remote_device_id)
+{
+    std::string request;
+    message_handle::packet_buf(request,"cmd","setup_data_tunnel");
+    message_handle::packet_buf(request,"device_id",m_device_id);
+    message_handle::packet_buf(request,"remote_device_id",remote_device_id);
+    message_handle::packet_buf(request,"source_name",source_name);
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr(m_server_ip.c_str());
+    addr.sin_port = htons(UDP_RECV_PORT);
+    ::sendto(m_client_sock,request.c_str(),request.length(),0,(struct sockaddr*)&addr, sizeof addr);
+}
 void p2p_punch_client::handle_punch_hole_response(std::map<std::string,std::string> &recv_map)//打洞成功回复
 {
     auto session_id=recv_map.find("session_id");
@@ -565,7 +637,6 @@ void p2p_punch_client::handle_punch_hole_response(std::map<std::string,std::stri
             m_event_loop->removeChannel(t_session.channelPtr);
             if(t_session.callback)
             {
-                std::cout<<"callback"<<std::endl;
                 t_session.callback(t_session.channelPtr,t_session.session_id,t_session.channel_id,t_session.src_name);
             }
             m_session_map.erase(t_session.session_id);
@@ -604,7 +675,9 @@ void p2p_punch_client::handle_set_up_connection(std::map<std::string,std::string
         t_session.session_id=std::stoi(session_id->second);
         t_session.channel_id=std::stoi(channel_id->second);
         t_session.src_name=src_name->second;
-        t_session.callback=m_connectCB;
+        if(t_session.channel_id==TUNNEL_CHANNEL_ID)
+        t_session.callback=m_tunnelCB;
+        else t_session.callback=m_connectCB;
         t_session.alive_time=GetTimeNow();
         t_session.channelPtr.reset(new xop::Channel(fd));
         t_session.channelPtr->setReadCallback([this,fd](){this->session_handle_read(fd);});
@@ -624,7 +697,7 @@ void p2p_punch_client::handle_active_connection(std::map<std::string,std::string
     auto port=recv_map.find("port");
     if(mode==std::end(recv_map)||session_id==std::end(recv_map)||channel_id==std::end(recv_map)||src_name==std::end(recv_map)||\
             ip==std::end(recv_map)||port==std::end(recv_map))return;
-    if(mode->second=="udp"&&m_connectCB)
+    if(mode->second=="udp"&&(m_connectCB||m_tunnelCB))
     {
         udp_active_connect_task(session_id->second,channel_id->second,src_name->second,ip->second,port->second,mode->second);
     }
@@ -648,7 +721,7 @@ void p2p_punch_client::handle_get_stream_server_info(std::map<std::string,std::s
     auto lan_flag=recv_map.find("lan_flag");
     m_stream_server_info->stream_server_id=stream_server_id->second;
     if(internal_ip->second!=m_stream_server_info->internal_ip||internal_port->second!=m_stream_server_info->internal_port\
-    ||external_ip->second!=m_stream_server_info->external_ip||external_port->second!=m_stream_server_info->external_port)
+            ||external_ip->second!=m_stream_server_info->external_ip||external_port->second!=m_stream_server_info->external_port)
     {
         m_stream_server_info->internal_ip=internal_ip->second;
         m_stream_server_info->internal_port=internal_port->second;
@@ -657,11 +730,11 @@ void p2p_punch_client::handle_get_stream_server_info(std::map<std::string,std::s
         if(lan_flag->second=="true")
         {
             if(m_resetstreamserverCB)m_resetstreamserverCB(m_stream_server_info->internal_ip,std::stoi(m_stream_server_info->internal_port),\
-            m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port));
+                                                           m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port));
         }
         else {
             if(m_resetstreamserverCB)m_resetstreamserverCB(m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port),\
-            m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port));
+                                                           m_stream_server_info->external_ip,std::stoi(m_stream_server_info->external_port));
         }
     }
 }
@@ -695,6 +768,8 @@ void p2p_punch_client::handle_stream_server_register(std::map<std::string,std::s
         auto stream_server_id=recv_map.find("stream_server_id");
         if(stream_server_id==recv_map.end())return;
         m_stream_server_info->stream_server_id=stream_server_id->second;
+        //notice the server
+        send_stream_server_keepalive();
     }
 }
 void p2p_punch_client::handle_restart_stream_server()
@@ -707,6 +782,64 @@ void p2p_punch_client::handle_restart_stream_server()
 void p2p_punch_client::handle_stream_server_keepalive()
 {
     std::cout<<"handle_stream_server_keepalive"<<std::endl;
+}
+void p2p_punch_client::handle_setup_data_tunnel(std::map<std::string,std::string> &recv_map)
+{//创建一个连接用的socket，5s有效时间
+    auto session_id=recv_map.find("session_id");
+    auto source_name=recv_map.find("source_name");
+    auto ip=recv_map.find("ip");
+    auto port=recv_map.find("port");
+    if(session_id!=std::end(recv_map)&&source_name!=std::end(recv_map)&&\
+    ip!=std::end(recv_map)&&port!=std::end(recv_map))
+    {
+        int fd=get_udp_session_sock();
+        if(fd<0)return;
+        m_p2p_session t_session;
+        t_session.session_id=std::stoi(session_id->second);
+        t_session.channel_id=TUNNEL_CHANNEL_ID;
+        t_session.src_name=source_name->second;
+        t_session.callback=m_tunnelCB;
+        t_session.alive_time=GetTimeNow();
+        t_session.channelPtr.reset(new xop::Channel(fd));
+        t_session.channelPtr->setReadCallback([this,fd](){this->session_handle_read(fd);});
+        t_session.channelPtr->enableReading();
+
+        m_event_loop->updateChannel(t_session.channelPtr);
+        m_session_map.insert(std::make_pair(t_session.session_id,t_session));
+        send_start_tunnel_transfer_packet(t_session,ip->second,std::stoi(port->second));
+    }
+}
+void p2p_punch_client::handle_server_setup_data_tunnel(std::map<std::string,std::string> &recv_map)
+{//创建kcp隧道
+    auto session_id=recv_map.find("session_id");
+    auto source_name=recv_map.find("source_name");
+    if(session_id!=std::end(recv_map)&&source_name!=std::end(recv_map))
+    {
+        if(!m_stream_server_info->data_tunnel->add_tunnel_session(std::stoi(session_id->second),source_name->second,xop::udp_data_tunnel::PROTOCAL_KCP))
+        {
+            LOG_ERROR("fail to setup data_tunnel session_id : %s %s!",session_id->second.c_str(),source_name->second.c_str());
+        }
+    }
+}
+void p2p_punch_client::handle_start_tunnel_transfer(std::map<std::string,std::string> &recv_map)
+{
+    auto session_id=recv_map.find("session_id");
+    auto status=recv_map.find("status");
+    auto source_name=recv_map.find("source_name");
+    if(session_id!=std::end(recv_map)&&status!=std::end(recv_map)&&source_name!=std::end(recv_map)&&status->second=="ok")
+    {
+        auto session=m_session_map.find(std::stoi(session_id->second));
+        if(session!=std::end(m_session_map)&&session->second.src_name==source_name->second)
+        {
+            m_p2p_session &t_session=session->second;
+            m_event_loop->removeChannel(t_session.channelPtr);
+            if(t_session.callback)
+            {
+                t_session.callback(t_session.channelPtr,t_session.session_id,t_session.channel_id,t_session.src_name);
+            }
+            m_session_map.erase(t_session.session_id);
+        }
+    }
 }
 void p2p_punch_client::udp_active_connect_task(std::string session_id,std::string channel_id,std::string src_name,std::string ip,std::string port,std::string mode)
 {
@@ -726,7 +859,14 @@ void p2p_punch_client::udp_active_connect_task(std::string session_id,std::strin
     message_handle::packet_buf(request,"port",port);
     message_handle::packet_buf(request,"mode",mode);
     ::send(fd,request.c_str(),request.length(),0);
-    m_connectCB(std::make_shared<xop::Channel>(fd),std::stoi(session_id),std::stoi(channel_id),src_name);
+    if(std::stoi(channel_id)==TUNNEL_CHANNEL_ID)
+    {
+        std::cout<<"udp_active_connect_task source:"<<session_id<<":"<<channel_id<<":"<<src_name<<std::endl;
+        if(m_tunnelCB)m_tunnelCB(std::make_shared<xop::Channel>(fd),std::stoi(session_id),std::stoi(channel_id),src_name);
+    }
+    else {
+        if(m_connectCB)m_connectCB(std::make_shared<xop::Channel>(fd),std::stoi(session_id),std::stoi(channel_id),src_name);
+    }
 }
 
 void p2p_punch_client::tcp_active_connect_task(std::string session_id,std::string channel_id,std::string src_name,std::string ip,std::string port,std::string mode)
@@ -771,7 +911,7 @@ void p2p_punch_client::server_restart( )
 }
 void p2p_punch_client::handle_keep_alive(std::map<std::string,std::string> &recv_map)//心跳保活
 {
-    std::cout<<"recv alive_time ack!"<<std::endl;
+    //std::cout<<"recv alive_time ack!"<<std::endl;
 }
 
 void p2p_punch_client::handle_nat_type_probe(std::map<std::string,std::string> &recv_map)//外网端口探测

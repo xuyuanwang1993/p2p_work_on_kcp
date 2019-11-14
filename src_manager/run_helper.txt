@@ -1,4 +1,4 @@
-Build:
+﻿Build:
     make
 server:
     ./run.sh
@@ -16,3 +16,26 @@ client1:
   ./p2p_client 192.168.1.1 2 recv
   
   input the device_id like 1 to connect by the commandline.
+
+
+
+//kcp下载测试
+中心服务器：(可部署于公网)
+
+//需指定系统库目录
+export LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
+./p2p_server ../tmp.ini -d
+
+下级服务器(部署于一级公网ip路由下，且路由器需支持upnp)
+修改server.ini
+修改internal_port 为本地工作端口
+修改external_port 为外网工作端口
+将server.ini与p2p_client二进制文件置于相同目录
+./p2p_client <server_ip><device_id><mode=server>
+
+资源提供方
+将待下载的文件与p2p_client置于同一目录(也可不在同一目录)
+./p2p_client <server_ip><device_id><mode=source>
+
+下载端
+./p2p_client <server_ip><device_id><mode=client>
