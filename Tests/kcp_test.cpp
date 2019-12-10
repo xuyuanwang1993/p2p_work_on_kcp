@@ -30,13 +30,13 @@ void kcp_test::kcp_recvcallback(std::shared_ptr<char> buf,int len,struct IKCPCB 
 }
 #pragma pack(1)
 struct  stream_header{
-    uint8_t command_type;//指令名 (无符号8位)
+    uint32_t command_type;//指令名 (无符号8位)
     uint32_t session_id;//会话id
     uint64_t sequence_id;//视频帧序列号
     uint64_t max_sequence_id;//帧总数
     uint64_t data_size;//包长度
-    uint16_t cseq;//指令序列号，过期的指令序列不处理
-    uint8_t check_mask;//头部校验码
+    uint32_t cseq;//指令序列号，过期的指令序列不处理
+    uint32_t check_mask;//头部校验码
 };
 
 typedef enum{

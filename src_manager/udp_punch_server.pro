@@ -39,7 +39,8 @@ HEADERS += ../Net/Timestamp.h \
     ../Tests/h264_file_handle.h \
     ../Tools/upnpmapper.h \
     ../Tools/file_reader.h \
-    ../Net/udp_data_tunnel.h
+    ../Net/udp_data_tunnel.h \
+    ../Tools/kcp_downland_tool.h
 SOURCES += ../Net/Timestamp.cpp \
     ../Net/Timer.cpp \
     ../Net/TcpSocket.cpp \
@@ -72,5 +73,8 @@ SOURCES += ../Net/Timestamp.cpp \
     ../Tests/h264_file_handle.cpp \
     ../Tools/upnpmapper.cpp \
     ../Tools/file_reader.cpp \
-    ../Net/udp_data_tunnel.cpp
+    ../Net/udp_data_tunnel.cpp \
+    ../Tools/kcp_downland_tool.cpp
 OTHER_FILES += run_helper.txt
+
+DISTFILES +=
