@@ -1,7 +1,6 @@
 ﻿#include "p2p_punch_server.h"
 #include "SocketUtil.h"
 #include "NetInterface.h"
-#include <random>
 typedef enum{
     SERVER_BEGIN=0,
     SERVER_NAT_TYPE_PROBE,
@@ -19,7 +18,6 @@ typedef enum{
     SERVER_GET_STREAM_SERVER_STATE,
     SERVER_RESTART_STREAM_SERVER,
     SERVER_RESTART_DEVICE,
-    SERVER_SETUP_DATA_TUNNEL,
     SERVER_END,
 }SERVER_COMMAND;
 static const char COMMAND_LIST[][64]={
@@ -39,7 +37,6 @@ static const char COMMAND_LIST[][64]={
   "get_stream_server_state",
   "restart_stream_server",
   "restart_device",
-  "setup_data_tunnel",
   "end",
 };
 std::unordered_map<std::string,int> p2p_punch_server::m_command_map;
@@ -340,9 +337,6 @@ void p2p_punch_server::handle_read()
                     break;
                 case SERVER_RESTART_DEVICE:
                     if(m_open_debug)handle_restart_device(m_server_sock[0],addr,recv_map);
-                    break;
-                case SERVER_SETUP_DATA_TUNNEL:
-                    if(m_stream_server_task_init)handle_setup_data_tunnel(m_server_sock[0],addr,recv_map);
                     break;
                 default:
                     break;
@@ -1024,107 +1018,6 @@ void p2p_punch_server::handle_restart_device(int send_fd,struct sockaddr_in&addr
     if(device_info==m_device_map.end())return;
     addr.sin_port = htons(std::stoi(device_info->second.port));
     addr.sin_addr.s_addr = inet_addr(device_info->second.ip.c_str());
-    ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
-}
-void p2p_punch_server::handle_setup_data_tunnel(int send_fd,struct sockaddr_in&addr,std::map<std::string,std::string> &recv_map)
-{
-    static std::random_device rd;
-    auto device_id=recv_map.find("device_id");
-    auto remote_device_id=recv_map.find("remote_device_id");
-    auto source_name=recv_map.find("source_name");
-    std::string response;
-    do{
-        if(device_id==std::end(recv_map)||remote_device_id==std::end(recv_map))
-        {
-            response=packet_error_response("setup_data_tunnel","false format!");
-            break;
-        }
-        if(device_id->second==remote_device_id->second)
-        {
-            response=packet_error_response("setup_data_tunnel","the same resource!");
-            break;
-        }
-        auto nat_info=m_device_map.find(device_id->second);
-        auto remote_nat_info=m_device_map.find(remote_device_id->second);
-        if(nat_info==std::end(m_device_map)||remote_nat_info==std::end(m_device_map)||m_id_map.size()<2)
-        {
-            response=packet_error_response("setup_data_tunnel","no availiable resource!");
-            break;
-        }
-        int size=rd()%(m_id_map.size()-1)+1;//exclude id 0;
-        int id=0;
-        std::string account_name;
-        for(auto i :m_id_map)
-        {
-            if(i.first!=0)size--;
-            if(size==0)
-            {
-                id=i.first;
-                account_name=i.second;
-                break;
-            }
-        }
-        if(id==0)
-        {
-            response=packet_error_response("setup_data_tunnel","no availiable server resource!");
-            break;
-        }
-        auto server_map=m_stream_server_map[account_name];
-        auto server_info=server_map.find(id);
-        if(server_info==std::end(server_map))
-        {
-            response=packet_error_response("setup_data_tunnel","no availiable server resource!");
-            break;
-        }
-        int sesson_id=m_session_id++;
-        message_handle::packet_buf(response,"cmd","server_setup_data_tunnel");
-        message_handle::packet_buf(response,"session_id",std::to_string(sesson_id));
-        message_handle::packet_buf(response,"source_name",source_name->second);
-        struct sockaddr_in addr_send = { 0 };
-        socklen_t addrlen = sizeof(addr_send);
-        addr_send.sin_family = AF_INET;
-        //ack stream_server
-        addr_send.sin_port = htons(server_info->second.external_port);
-        addr_send.sin_addr.s_addr = inet_addr(server_info->second.external_ip.c_str());
-         ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr_send, addrlen);
-         response=std::string();
-         addr_send.sin_port = htons(std::stoi(remote_nat_info->second.port));
-        addr_send.sin_addr.s_addr = inet_addr(remote_nat_info->second.ip.c_str());
-        message_handle::packet_buf(response,"cmd","setup_data_tunnel");
-        message_handle::packet_buf(response,"session_id",std::to_string(sesson_id));
-        message_handle::packet_buf(response,"source_name",source_name->second);
-        //ack remote_device delay 200ms
-        std::string response2=response;
-        if(remote_nat_info->second.ip!=server_info->second.external_ip)
-        {
-            message_handle::packet_buf(response2,"ip",server_info->second.external_ip);
-            message_handle::packet_buf(response2,"port",std::to_string(server_info->second.stream_external_port));
-        }
-        else {
-            message_handle::packet_buf(response2,"ip",server_info->second.internal_ip);
-            message_handle::packet_buf(response2,"port",std::to_string(server_info->second.stream_internal_port));
-        }
-        m_event_loop->addTimer([send_fd,response2,addr_send,addrlen](){
-            ::sendto(send_fd,response2.c_str(),response2.length(),0,(struct sockaddr*)&addr_send, addrlen);
-            return false;
-        },200);
-        //ack the device that sends the request delay 200ms
-        response2=response;
-        if(nat_info->second.ip!=server_info->second.external_ip)
-        {
-            message_handle::packet_buf(response2,"ip",server_info->second.external_ip);
-            message_handle::packet_buf(response2,"port",std::to_string(server_info->second.stream_external_port));
-        }
-        else {
-            message_handle::packet_buf(response2,"ip",server_info->second.internal_ip);
-            message_handle::packet_buf(response2,"port",std::to_string(server_info->second.stream_internal_port));
-        }
-        m_event_loop->addTimer([send_fd,response2,addr,addrlen](){
-            ::sendto(send_fd,response2.c_str(),response2.length(),0,(struct sockaddr*)&addr, addrlen);
-            return false;
-        },200);
-        return;
-    }while(0);
     ::sendto(send_fd,response.c_str(),response.length(),0,(struct sockaddr*)&addr, sizeof addr);
 }
 void p2p_punch_server::handle_not_supported_command(int send_fd,std::string cmd,struct sockaddr_in &addr)

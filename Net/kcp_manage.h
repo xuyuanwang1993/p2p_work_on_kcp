@@ -1,4 +1,4 @@
-﻿#ifndef KCP_MANAGE_H
+#ifndef KCP_MANAGE_H
 #define KCP_MANAGE_H
 #include <functional>
 #include <memory>
@@ -36,7 +36,6 @@ namespace sensor_net{
         KCP_Interface(std::shared_ptr<xop::Channel>channel,unsigned int conv_id,xop::EventLoop *event_loop,ClearCallback clearCB,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size=32);
         //发送用户数据
         void Send_Userdata(std::shared_ptr<char>buf,int len);
-        void Send_Userdata(const char *buf,int len);
         int Send(const char *buf,int len);
         void Update(int64_t timenow)
         {
@@ -53,12 +52,11 @@ namespace sensor_net{
                     clear();
                 }
             }
-        }
+        };
         void SetTransferMode(KCP_TRANSFER_MODE mode,int nodelay=0, int interval=10, int resend=0, int nc=0);
-        void SetLostConnectionCallback(const LostConnectionCallback &cb){m_lost_connectionCB=cb;}
-        void RestKcpRecvCallback(RecvDataCallback&recvCB){m_recvCB=recvCB;}
+        void SetLostConnectionCallback(const LostConnectionCallback &cb){m_lost_connectionCB=cb;};
         ~KCP_Interface();
-         bool GetInterfaceIsValid(){return m_have_cleared?false:true;}
+         bool GetInterfaceIsValid(){return m_have_cleared?false:true;};
          void clear();
     private:
         bool CheckTransWindow();
@@ -81,13 +79,13 @@ namespace sensor_net{
         {
             auto timePoint = std::chrono::steady_clock::now();
             return std::chrono::duration_cast<std::chrono::milliseconds>(timePoint.time_since_epoch()).count();
-        }
+        };
 
         static KCP_Manager &GetInstance()
         {//单例模式
             static KCP_Manager manager;
             return manager;
-        }
+        };
         void Config(xop::EventLoop *event_loop)
         {
             if(!m_init&&event_loop)
@@ -95,7 +93,7 @@ namespace sensor_net{
                 m_init=true;
                 m_event_loop=event_loop;
             }
-        }
+        };
         std::shared_ptr<KCP_Interface> AddConnection(int fd,std::string ip,int port,unsigned int conv_id,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size=32);
         std::shared_ptr<KCP_Interface> AddConnection(std::shared_ptr<xop::Channel> channel,unsigned int conv_id,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size=32);
         std::shared_ptr<KCP_Interface>GetConnectionHandle(int conv_id)
@@ -105,17 +103,17 @@ namespace sensor_net{
             auto iter=m_kcp_map.find(conv_id);
             if(iter!=std::end(m_kcp_map))return iter->second;
             return nullptr;
-        }
-        void CloseConnection(unsigned int conv_id);
-        void StartUpdateLoop(unsigned int interval=10);//ms
+        };
+        void CloseConnection(int conv_id);
+        void StartUpdateLoop();
     private:
         bool UpdateLoop();
         std::atomic<bool> m_init;
-        KCP_Manager(){}
-        ~KCP_Manager(){}
+        KCP_Manager(){};
+        ~KCP_Manager(){};
         std::mutex m_mutex;
         xop::EventLoop *m_event_loop;
-        std::unordered_map<unsigned int,std::shared_ptr<KCP_Interface>> m_kcp_map;
+        std::unordered_map<int,std::shared_ptr<KCP_Interface>> m_kcp_map;
     };
 };
 #endif // KCP_MANAGE_H

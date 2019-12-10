@@ -1,4 +1,4 @@
-﻿#include "MD5.h"
+#include "MD5.h"
 #include "Tools.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -14,7 +14,6 @@ char *Get_MD5_String(const char *buf,int buf_size)
     {
         sprintf(md5_string+i*2,"%02x",aHash[i]);
     }
-    free(aHash);
     md5_string[32]='\0';
     return md5_string;
 }
