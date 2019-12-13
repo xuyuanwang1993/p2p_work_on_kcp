@@ -2,7 +2,7 @@
 
 TARGET_APP = p2p_server
 TARGET_APP2 = p2p_client
-
+TARGET_APP3 = new_model_test
 OUT_DIR = out
 APP_DIR = examples
 APP_SUFIX =.cpp
@@ -26,7 +26,7 @@ WORK_DIR = .\
         ./Net\
         ./p2p_punch_model \
         ./Tools\
-		./Tests
+	./Tests
 
 SRC_FILE += $(patsubst %,%/*.c,$(WORK_DIR))
 SRC_FILE += $(patsubst %,%/*.h,$(WORK_DIR))
@@ -36,7 +36,7 @@ CPP_SOURCE =$(filter %.c %.cpp,$(wildcard $(SRC_FILE)))
 INC = $(patsubst %,-I%,$(WORK_DIR))
 ALL_OBJECTS = $(addprefix $(OBJS_PATH)/,$(addsuffix .o,$(basename $(notdir $(CPP_SOURCE)))))
 
-all: prepare BUILD_DIR $(TARGET_APP) $(TARGET_APP2)
+all: prepare BUILD_DIR $(TARGET_APP) $(TARGET_APP2) $(TARGET_APP3)
 
 .PHONY : prepare
 prepare:
@@ -52,6 +52,8 @@ BUILD_DIR:
 $(TARGET_APP) : $(ALL_OBJECTS)
 	$(CXX) $^ $(APP_DIR)/$@$(APP_SUFIX) $(INC) -o $(OUT_DIR)/$@ $(CFLAGS) $(LD_FLAGS) $(CXX_FLAGS)
 $(TARGET_APP2) : $(ALL_OBJECTS)
+	$(CXX) $^ $(APP_DIR)/$@$(APP_SUFIX) $(INC) -o $(OUT_DIR)/$@ $(CFLAGS) $(LD_FLAGS) $(CXX_FLAGS)
+$(TARGET_APP3) : $(ALL_OBJECTS)
 	$(CXX) $^ $(APP_DIR)/$@$(APP_SUFIX) $(INC) -o $(OUT_DIR)/$@ $(CFLAGS) $(LD_FLAGS) $(CXX_FLAGS)
 $(OBJS_PATH)/%.o : ./Net/%.cpp
 	@$(CXX) -c $< -o $@ $(CXX_FLAGS) $(INC)

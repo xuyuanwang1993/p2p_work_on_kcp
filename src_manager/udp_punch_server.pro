@@ -37,7 +37,9 @@ HEADERS += ../Net/Timestamp.h \
     ../Tools/parase_request.h \
     ../Tests/kcp_test.h \
     ../Tests/h264_file_handle.h \
-    ../Tools/upnpmapper.h
+    ../Tools/upnpmapper.h \
+    ../Tools/encryption_function.h \
+    ../Tools/encryption_context.h
 SOURCES += ../Net/Timestamp.cpp \
     ../Net/Timer.cpp \
     ../Net/TcpSocket.cpp \
@@ -68,5 +70,8 @@ SOURCES += ../Net/Timestamp.cpp \
     ../examples/p2p_server.cpp \
     ../Tests/kcp_test.cpp \
     ../Tests/h264_file_handle.cpp \
-    ../Tools/upnpmapper.cpp
+    ../Tools/upnpmapper.cpp \
+    ../examples/new_model_test.cpp \
+    ../Tools/encryption_function.cpp \
+    ../Tools/encryption_context.cpp
 OTHER_FILES += run_helper.txt
