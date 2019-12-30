@@ -1,4 +1,4 @@
-// PHZ
+﻿// PHZ
 // 2018-5-15
     
 #ifndef XOP_CHANNEL_H
@@ -29,13 +29,13 @@ public:
     typedef std::function<void()> EventCallback;
     //没有默认的构造函数
     Channel() = delete;
-    Channel(int fd) : _fd(fd) {};
+    Channel(int fd,bool cycle=false) : _fd(fd),_cycle(cycle) {};
     ~Channel() {
-        if(_fd>0)
+        if(_fd>0&&!_cycle)
         {
             SocketUtil::close(_fd);
         }};
-    
+    void setCycle(bool cycle){_cycle=cycle;};
     void setReadCallback(const EventCallback& cb)
     { _readCallback = cb; }
     void setWriteCallback(const EventCallback& cb)
@@ -106,6 +106,7 @@ private:
     
 	SOCKET _fd = 0;
     int _events = 0;    
+    bool _cycle=false;//控制析构时是否关闭套接字
 };
 
 typedef std::shared_ptr<Channel> ChannelPtr;

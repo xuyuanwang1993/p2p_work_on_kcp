@@ -350,7 +350,7 @@ void  encryption_function::dump_uint_8(const uint8_t *buf,uint32_t len,std::stri
     }
     printf("\r\n");
 }
-void encryption_function::diff_print_time(int64_t time1,int64_t time2)
+int64_t encryption_function::diff_print_time(int64_t time1,int64_t time2)
 {
     int64_t sec1=time1/1000;
     int64_t microsec1=(time1%1000)*1000;
@@ -377,7 +377,7 @@ void encryption_function::diff_print_time(int64_t time1,int64_t time2)
             printf("time diff is smaller than 1ms or the time is equal!\r\n");
         }
     }
-
+    return time2-time1;
 }
 std::string &encryption_function::get_description_by_type(EncryptionType type)
 {

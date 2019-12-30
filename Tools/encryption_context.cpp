@@ -57,6 +57,7 @@ Encryption_Packet  Encryption_Tool::Encryption_Data(uint32_t type,Raw_Packet &pa
         head.private_data_flag=head.private_data_len>0?1:0;
         ret.packet_len=head_len+head.payload_data_len+head.private_data_len;
         ret.data.reset(new uint8_t[ret.packet_len]);
+        head.check_sum=(head.payload_type+head.encryption_flag+head.encryption_type+head.payload_data_len+head.private_data_len+head.protocal_version+head.private_data_flag)&0xff;
         memcpy(ret.data.get(),&head,head_len);
         if(head.private_data_len>0)memcpy(ret.data.get()+head_len,private_data.second.get(),head.private_data_len);
         if(head.payload_data_len>0)memcpy(ret.data.get()+head_len+head.private_data_len,payload_data.second.get(),\
@@ -68,6 +69,7 @@ Encryption_Packet  Encryption_Tool::Encryption_Data(uint32_t type,Raw_Packet &pa
         head.private_data_flag=head.private_data_len>0?1:0;
         ret.packet_len=head_len+head.payload_data_len+head.private_data_len;
         ret.data.reset(new uint8_t[ret.packet_len]);
+        head.check_sum=(head.payload_type+head.encryption_flag+head.encryption_type+head.payload_data_len+head.private_data_len+head.protocal_version+head.private_data_flag)&0xff;
         memcpy(ret.data.get(),&head,head_len);
         if(head.private_data_len>0)memcpy(ret.data.get()+head_len,packet.private_data.get(),head.private_data_len);
         if(head.payload_data_len>0)memcpy(ret.data.get()+head_len+head.private_data_len,packet.payload_data.get(),\
@@ -81,6 +83,7 @@ Raw_Packet  Encryption_Tool::Decryption_Data(Encryption_Packet &packet)
     uint32_t head_len=sizeof(Encryption_Header);
     do{
         if(packet.packet_len<head_len)break;
+        if(!Check_Packet_Legal(packet.data.get(),packet.packet_len))break;
         Encryption_Header head;
         memcpy(&head,packet.data.get(),head_len);
         if(head.private_data_len+head_len+head.payload_data_len!=packet.packet_len)break;
@@ -191,4 +194,12 @@ void Encryption_Tool::Regsiter_All_Default_Func()
     info.encryption_func=micagent::encryption_function::micagent_enbasepos;
     info.decryption_func=micagent::encryption_function::micagent_debasepos;
     m_func_map.emplace(std::pair<uint32_t,Encryption_Info>(micagent::MICAGENT_BASEPOS,info));
+}
+bool Encryption_Tool::Check_Packet_Legal(const void *data,uint32_t len)
+{
+    if(len<sizeof (Encryption_Header))return false;
+    const Encryption_Header *p_data=(const Encryption_Header *)(data);
+    uint8_t tmp=(p_data->payload_type+p_data->encryption_flag+p_data->encryption_type+p_data->payload_data_len+p_data->private_data_len+p_data->protocal_version\
+    +p_data->private_data_flag)&0xff;
+    return tmp==p_data->check_sum;
 }

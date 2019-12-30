@@ -43,9 +43,8 @@ public:
     }
     static bool compare_handle_packet(const Handle_Packet&packet1,const Handle_Packet&packet2);
     static void  dump_uint_8(const uint8_t *buf,uint32_t len,std::string info=std::string());
-    static void diff_print_time(int64_t time1,int64_t time2);
+    static int64_t diff_print_time(int64_t time1,int64_t time2);
     static std::string &get_description_by_type(EncryptionType type);
-    static Handle_Packet make_handle_packet(uint32_t len);
 };
 }
 #endif // ENCRYPTION_FUNCTION_H

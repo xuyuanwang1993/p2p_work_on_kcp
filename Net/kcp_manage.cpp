@@ -5,6 +5,7 @@
 #include <utility>
 #include <chrono>
 #include <future>
+//#define TRY_QUICK_SEND
 using namespace sensor_net;
 static  int kcp_output(const char *buf, int len, struct IKCPCB *kcp, void *user)
 {
@@ -71,7 +72,7 @@ KCP_Interface::KCP_Interface(int fd,unsigned int conv_id,xop::EventLoop *event_l
     m_taskScheduler->updateChannel(m_udp_channel);
 }
 KCP_Interface::KCP_Interface(std::shared_ptr<xop::Channel>channel,unsigned int conv_id,xop::EventLoop *event_loop,ClearCallback clearCB,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size)
-        :m_readBufferPtr(new xop::BufferReader),m_udp_channel(channel),m_clear_CB(clearCB),m_recvCB(recvCB),m_data(data)
+    :m_readBufferPtr(new xop::BufferReader),m_udp_channel(channel),m_clear_CB(clearCB),m_recvCB(recvCB),m_data(data)
 {
     m_fd=channel->fd();
     m_taskScheduler=event_loop?event_loop->getTaskScheduler():nullptr;
@@ -151,9 +152,13 @@ void KCP_Interface::SetTransferMode(KCP_TRANSFER_MODE mode,int nodelay, int inte
 
 void KCP_Interface::Send_Userdata(std::shared_ptr<char>buf,int len)
 {
+#ifndef TRY_QUICK_SEND
     m_taskScheduler->addTriggerEvent([this,buf,len](){
+#endif
         if(this->CheckTransWindow())
         {
+            std::cout<<"kcp_send : size"<<len<<" channel_id :"<<this->m_data->channel_id<<" src_name "<<this->m_data->src_name<<\
+            " conv_id "<<m_kcp->conv<<std::endl;
             ikcp_send(this->m_kcp,buf.get(),len);
         }
         else
@@ -167,9 +172,59 @@ void KCP_Interface::Send_Userdata(std::shared_ptr<char>buf,int len)
                 }
             }
         }
+#ifndef TRY_QUICK_SEND
     });
+#endif
+}
+void KCP_Interface::Send_Userdata(const char *buf,int len)
+{
+#ifndef TRY_QUICK_SEND
+    m_taskScheduler->addTriggerEvent([this,buf,len](){
+#endif
+        if(this->CheckTransWindow())
+        {
+            ikcp_send(this->m_kcp,buf,len);
+        }
+        else
+        {
+            if(m_lost_connectionCB)
+            {
+                int64_t time_now=KCP_Manager::GetTimeNow();
+                if(time_now-m_last_alive_time>MAX_TIMEOUT_TIME)
+                {//判断对端是否断开
+                    m_lost_connectionCB(m_data);
+                }
+            }
+        }
+#ifndef TRY_QUICK_SEND
+    });
+#endif
 }
 
+void KCP_Interface::Send_Userdata(std::shared_ptr<uint8_t>buf,int len)
+{
+#ifndef TRY_QUICK_SEND
+    m_taskScheduler->addTriggerEvent([this,buf,len](){
+#endif
+        if(this->CheckTransWindow())
+        {
+            ikcp_send(this->m_kcp,(const char *)buf.get(),len);
+        }
+        else
+        {
+            if(m_lost_connectionCB)
+            {
+                int64_t time_now=KCP_Manager::GetTimeNow();
+                if(time_now-m_last_alive_time>MAX_TIMEOUT_TIME)
+                {//判断对端是否断开
+                    m_lost_connectionCB(m_data);
+                }
+            }
+        }
+#ifndef TRY_QUICK_SEND
+    });
+#endif
+}
 int KCP_Interface::Send(const char *buf,int len)
 {
     if(m_have_cleared)return -1;
@@ -183,11 +238,11 @@ void KCP_Interface::clear()
     {
         m_have_cleared=true;
         if (!m_taskScheduler->addTriggerEvent([this]() {
-            if(this->m_clear_CB)
-            {
-                this->m_clear_CB();
-            }
-        }))
+                                              if(this->m_clear_CB)
+        {
+                                              this->m_clear_CB();
+    }
+    }))
         {
             this->m_taskScheduler->addTimer([this]() {
                 if(this->m_clear_CB)
@@ -201,7 +256,13 @@ void KCP_Interface::clear()
 bool KCP_Interface::CheckTransWindow()
 {
     if(m_kcp->rmt_wnd>m_kcp->snd_wnd)ikcp_wndsize(m_kcp,m_kcp->rmt_wnd,m_kcp->rcv_wnd);//更改发送窗大小
-    if(ikcp_waitsnd(m_kcp)>=2*m_kcp->snd_wnd)return false;//缓存积累
+    if(ikcp_waitsnd(m_kcp)>=2*m_kcp->snd_wnd)
+    {
+        int tmp_wnd=2*m_kcp->snd_wnd;
+        tmp_wnd=tmp_wnd>=MAX_WINDOW_SIZE?MAX_WINDOW_SIZE:tmp_wnd;
+        ikcp_wndsize(m_kcp,tmp_wnd,m_kcp->rcv_wnd);
+        return false;//缓存积累
+    }
     return true;
 }
 
@@ -225,7 +286,7 @@ std::shared_ptr<KCP_Interface> KCP_Manager::AddConnection(int fd,std::string ip,
     addr.sin_addr.s_addr = inet_addr(ip.c_str());
     ::connect(fd, (struct sockaddr*)&addr, addrlen);//绑定对端信息
     std::shared_ptr<KCP_Interface> interface(new KCP_Interface(fd,conv_id,m_event_loop,[conv_id,this](){
-           this->CloseConnection(conv_id);
+        this->CloseConnection(conv_id);
     },recvCB,data,window_size));
     m_kcp_map.insert(std::make_pair(conv_id,interface));
     return interface;
@@ -237,7 +298,7 @@ std::shared_ptr<KCP_Interface> KCP_Manager::AddConnection(std::shared_ptr<xop::C
     std::lock_guard<std::mutex> locker(m_mutex);
     int fd=channel->fd();
     std::shared_ptr<KCP_Interface> interface(new KCP_Interface(channel,conv_id,m_event_loop,[conv_id,this](){
-           this->CloseConnection(conv_id);
+        this->CloseConnection(conv_id);
     },recvCB,data,window_size));
     m_kcp_map.insert(std::make_pair(conv_id,interface));
     return interface;
@@ -250,13 +311,11 @@ void KCP_Manager::StartUpdateLoop()
 void KCP_Manager::CloseConnection(int conv_id)
 {//移除连接
     if(!m_init)return ;
-    this->m_event_loop->addTriggerEvent([this,conv_id](){
-        std::lock_guard<std::mutex> locker(m_mutex);
-        if(m_kcp_map.find(conv_id)!=std::end(m_kcp_map))
-        {
-            m_kcp_map.erase(conv_id);
-        }
-    });
+    std::lock_guard<std::mutex> locker(m_mutex);
+    if(m_kcp_map.find(conv_id)!=std::end(m_kcp_map))
+    {
+        m_kcp_map.erase(conv_id);
+    }
 }
 bool KCP_Manager::UpdateLoop()
 {

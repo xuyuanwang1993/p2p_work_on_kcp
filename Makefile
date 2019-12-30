@@ -26,7 +26,8 @@ WORK_DIR = .\
         ./Net\
         ./p2p_punch_model \
         ./Tools\
-	./Tests
+	./Tests\
+	./relay_server_model
 
 SRC_FILE += $(patsubst %,%/*.c,$(WORK_DIR))
 SRC_FILE += $(patsubst %,%/*.h,$(WORK_DIR))
@@ -62,6 +63,8 @@ $(OBJS_PATH)/%.o : ./p2p_punch_model/%.cpp
 $(OBJS_PATH)/%.o : ./Tools/%.cpp
 	@$(CXX) -c $< -o  $@  $(CXX_FLAGS) $(INC)
 $(OBJS_PATH)/%.o : ./Tests/%.cpp
+	@$(CXX) -c $< -o  $@  $(CXX_FLAGS) $(INC)
+$(OBJS_PATH)/%.o : ./relay_server_model/%.cpp
 	@$(CXX) -c $< -o  $@  $(CXX_FLAGS) $(INC)
 $(OBJS_PATH)/%.o : ./%.cpp
 	@$(CXX) -c $< -o $@ $(CXX_FLAGS) $(INC)

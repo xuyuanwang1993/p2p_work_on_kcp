@@ -1,4 +1,4 @@
-//=====================================================================
+﻿//=====================================================================
 //
 // KCP - A Better ARQ Protocol Implementation
 // skywind3000 (at) gmail.com, 2010-2011
@@ -32,8 +32,8 @@ const IUINT32 IKCP_CMD_WASK = 83;		// cmd: window probe (ask)
 const IUINT32 IKCP_CMD_WINS = 84;		// cmd: window size (tell)
 const IUINT32 IKCP_ASK_SEND = 1;		// need to send IKCP_CMD_WASK
 const IUINT32 IKCP_ASK_TELL = 2;		// need to send IKCP_CMD_WINS
-const IUINT32 IKCP_WND_SND = 32;
-const IUINT32 IKCP_WND_RCV = 128;       // must >= max fragment size
+const IUINT32 IKCP_WND_SND = 1024;
+const IUINT32 IKCP_WND_RCV = 1024;       // must >= max fragment size
 const IUINT32 IKCP_MTU_DEF = 1400;
 const IUINT32 IKCP_ACK_FAST	= 3;
 const IUINT32 IKCP_INTERVAL	= 100;

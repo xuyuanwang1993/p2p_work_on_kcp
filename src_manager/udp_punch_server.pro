@@ -3,7 +3,8 @@ INCLUDEPATH += ../ \
     ../Net \
     ../p2p_punch_model \
     ../Tools \
-    ../Tests
+    ../Tests\
+    ../relay_server_model
 HEADERS += ../Net/Timestamp.h \
     ../Net/Timer.h \
     ../Net/ThreadSafeQueue.h \
@@ -39,7 +40,9 @@ HEADERS += ../Net/Timestamp.h \
     ../Tests/h264_file_handle.h \
     ../Tools/upnpmapper.h \
     ../Tools/encryption_function.h \
-    ../Tools/encryption_context.h
+    ../Tools/encryption_context.h \
+    ../relay_server_model/data_relay_server.h \
+    ../Tools/encrption_buf_cache.h
 SOURCES += ../Net/Timestamp.cpp \
     ../Net/Timer.cpp \
     ../Net/TcpSocket.cpp \
@@ -73,5 +76,7 @@ SOURCES += ../Net/Timestamp.cpp \
     ../Tools/upnpmapper.cpp \
     ../examples/new_model_test.cpp \
     ../Tools/encryption_function.cpp \
-    ../Tools/encryption_context.cpp
+    ../Tools/encryption_context.cpp \
+    ../relay_server_model/data_relay_server.cpp \
+    ../Tools/encrption_buf_cache.cpp
 OTHER_FILES += run_helper.txt

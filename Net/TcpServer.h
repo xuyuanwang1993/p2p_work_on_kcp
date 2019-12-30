@@ -29,7 +29,8 @@ public:
 
     uint16_t getPort() const 
     { return _port; }
-
+    void addActiveTcpConnection(std::string ip,std::string port);
+    void addActiveTcpConnection(int fd);
 protected:
     virtual TcpConnection::Ptr newConnection(SOCKET sockfd);
     void addConnection(SOCKET sockfd, TcpConnection::Ptr tcpConn);

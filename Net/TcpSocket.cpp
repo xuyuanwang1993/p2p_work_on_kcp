@@ -1,4 +1,4 @@
-// PHZ
+﻿// PHZ
 // 2018-5-15
 
 #include "TcpSocket.h"
@@ -75,7 +75,13 @@ bool TcpSocket::connect(std::string ip, uint16_t port, int timeout)
 
 void TcpSocket::close()
 {
-	::CloseSocket(_sockfd);
+#if defined(__linux) || defined(__linux__)
+    ::close(_sockfd);
+#elif defined(WIN32) || defined(_WIN32)
+    closesocket(_sockfd);
+#else
+
+#endif
     _sockfd = 0;
 }
 

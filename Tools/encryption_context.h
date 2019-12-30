@@ -13,9 +13,10 @@ typedef  struct _Encryption_Header{
     uint32_t encryption_flag:1;//是否加密标识位
     uint32_t encryption_type:3;//加密方式
     uint32_t private_data_flag:1;//是否携带私有数据标识
-    uint32_t private_data_len:24;//私有数据长度 私有数据只进行base64加密
+    uint32_t private_data_len:16;//私有数据长度 私有数据只进行base64加密
     uint32_t payload_type:8;//负载类型
     uint32_t payload_data_len:24;//负载长度
+    uint32_t check_sum:8;//校验位
 }Encryption_Header;
 
 typedef  struct _Encryption_Packet{
@@ -84,11 +85,18 @@ public:
      */
     Raw_Packet  Decryption_Data(Encryption_Packet &packet);
     /**
+     * @brief Check_Packet_Legal 判断数据包是否符合本模块头部封装规则
+     * @param data 数据指针首地址
+     * @param len 可读长度
+     * @return 符合规则返回为真 否则为假
+     */
+    bool Check_Packet_Legal(const void *data,uint32_t len);
+private:
+    /**
      * @brief Regsiter_All_Func 注册默认加密函数
      */
     void Regsiter_All_Default_Func();
-private:
-    Encryption_Tool(){}
+    Encryption_Tool(){Regsiter_All_Default_Func();}
     ~Encryption_Tool(){}
     /**
      * @brief m_func_map 存储加密函数

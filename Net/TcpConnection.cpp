@@ -1,4 +1,4 @@
-#include "TcpConnection.h"
+﻿#include "TcpConnection.h"
 #include "SocketUtil.h"
 
 using namespace xop;
@@ -121,7 +121,7 @@ void TcpConnection::handleClose()
     std::lock_guard<std::mutex> lock(_mutex);
     if (!_isClosed)
     {
-        _isClosed = false;
+        _isClosed = true;
         _taskScheduler->removeChannel(_channelPtr);
 
         if (_closeCB)

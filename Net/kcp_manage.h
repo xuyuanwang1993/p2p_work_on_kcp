@@ -1,4 +1,4 @@
-#ifndef KCP_MANAGE_H
+﻿#ifndef KCP_MANAGE_H
 #define KCP_MANAGE_H
 #include <functional>
 #include <memory>
@@ -30,12 +30,14 @@ namespace sensor_net{
     class KCP_Interface{
         const int MAX_WINDOW_SIZE=2048;
         const int MAX_TIMEOUT_TIME=5*1000;//5s
-        const int MAX_FRAMESIZE=204800;//200*1024
+        const int MAX_FRAMESIZE=1048576;//1024*1024
     public:
         KCP_Interface(int fd,unsigned int conv_id,xop::EventLoop *event_loop,ClearCallback clearCB,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size=32);
         KCP_Interface(std::shared_ptr<xop::Channel>channel,unsigned int conv_id,xop::EventLoop *event_loop,ClearCallback clearCB,RecvDataCallback recvCB,std::shared_ptr<data_ptr>data,int window_size=32);
         //发送用户数据
         void Send_Userdata(std::shared_ptr<char>buf,int len);
+        void Send_Userdata(std::shared_ptr<uint8_t>buf,int len);
+        void Send_Userdata(const char *buf,int len);
         int Send(const char *buf,int len);
         void Update(int64_t timenow)
         {

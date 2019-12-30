@@ -1,4 +1,4 @@
-// PHZ
+﻿// PHZ
 // 2018-5-15
 
 #include "SocketUtil.h"
@@ -133,7 +133,12 @@ void SocketUtil::setRecvBufSize(SOCKET sockfd, int size)
 {
     setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (char *)&size, sizeof(size));
 }
-
+void SocketUtil::makeSockAddr(struct sockaddr_in &addr,std::string ip,uint16_t port)
+{
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr(ip.c_str());
+    addr.sin_port = htons(port);
+}
 std::string SocketUtil::getPeerIp(SOCKET sockfd)
 {
     struct sockaddr_in addr = { 0 };

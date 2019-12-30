@@ -1,4 +1,4 @@
-// PHZ
+﻿// PHZ
 // 2018-5-15
 //封装了一些套接字功能函数
 #ifndef XOP_SOCKET_UTIL_H
@@ -25,6 +25,7 @@ public:
     static void setNoSigpipe(SOCKET sockfd);
     static void setSendBufSize(SOCKET sockfd, int size);
     static void setRecvBufSize(SOCKET sockfd, int size);
+    static void makeSockAddr(struct sockaddr_in &addr,std::string ip,uint16_t port);
     static std::string getPeerIp(SOCKET sockfd);
     static uint16_t getPeerPort(SOCKET sockfd);
     static uint16_t getLocalPort(SOCKET sockfd);
